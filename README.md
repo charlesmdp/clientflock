@@ -1,6 +1,6 @@
 # ClientFlock
 
-A Cloudflare Workers + D1 MVP: website or business description → mission → market research → ideal-client lists → 3 sourced companies → checked source quotes → short email drafts.
+A Cloudflare Workers + D1 MVP: website or business description → mission → market research → ideal-client lists → 3 sourced companies → checked source quotes → short email drafts → separate factual review.
 
 Two landing layouts: `/` and `/split.html`. Eleven profession examples rotate three at a time. Examples are clearly fictional; actual searches use the server pipeline.
 
@@ -13,7 +13,7 @@ Two landing layouts: `/` and `/split.html`. Eleven profession examples rotate th
 - `worker/`: existing Sites-hosted Cloudflare runtime.
 - `cloudflare/`: standalone Worker entry and Wrangler configuration for your own Cloudflare account. No framework build needed for this entry.
 
-The model defaults to `gpt-6-luna`. Configure `OPENAI_MODEL` to change it. No automatic expensive model escalation. OpenAI web search discovers companies; bounded HTTP fetches check exact prospect quotes against source pages. Pages that cannot be checked cause an explicit pause. No paywall, no automatic email sending.
+The model defaults to `gpt-6-luna`. Configure `OPENAI_MODEL` to change it. After a failed formatting or sourcing validation, a bounded repair uses `gpt-6.1-sol` (override with `OPENAI_FALLBACK_MODEL`). The search stops after at most 18 provider submissions. OpenAI web search discovers companies; bounded HTTP fetches check exact prospect quotes against source pages. Pages that cannot be checked cause an explicit pause. No paywall, no automatic email sending.
 
 ## Cloudflare deployment in your account
 
@@ -31,10 +31,10 @@ D1 leases prevent simultaneous stage processing. There is a small crash window b
 
 ## Reliability and current limits
 
-- Three documents are generated before company research. Word ranges checked: 200–300 / 250–350 / 500–700. A failed constraint pauses and can be retried.
+- Three documents are generated before company research. Word ranges checked: 200–300 / 250–350 / 500–700. A failed formatting or sourcing constraint receives at most two repair attempts, then pauses.
 - Market figures are instructed to be sourced; figures are not independently recalculated. Documents distinguish hypotheses from observed facts.
 - Exact prospect quotes are matched against public source HTML before emails are drafted. This confirms the quoted text, not the prospect's purchasing intent or every generated inference.
-- Emails are drafts: subject lowercase, <=6 words, no emoji; <=6 short sentences and a final question. Review before sending.
+- Emails are drafts: subject lowercase, <=6 words, no emoji; <=6 short sentences and a final question. A separate model pass checks the drafts against verified quotes and the offer; this is an additional guard, not a guarantee. Review before sending.
 - No Icypeas, Findymail or FullEnrich credentials are connected yet. Results provide a company contact page and a suggested decision-maker role. They do not claim verified personal email addresses.
 - No browser-rendering fallback yet. Blocked or JavaScript-only source pages can pause the verification step. HTTP safety rejects non-public hostnames/IPs, non-HTTPS sources, credentials and custom ports and checks DNS for redirects; DNS rebinding remains a limitation of preflight DNS plus fetch and should be hardened before untrusted public deployment.
 - Origin checks and application rate budgets are included. The current managed Site remains owner-private. Before a public launch, add Cloudflare Turnstile/rate limiting and a retention policy.
