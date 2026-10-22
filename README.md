@@ -33,7 +33,7 @@ D1 leases prevent simultaneous stage processing. There is a small crash window b
 
 - Three documents are generated before company research. Word ranges checked: 200–300 / 250–350 / 500–700. A failed formatting or sourcing constraint receives at most two repair attempts, then pauses.
 - Market figures are instructed to be sourced; figures are not independently recalculated. Documents distinguish hypotheses from observed facts.
-- Exact prospect quotes are matched against public source HTML before emails are drafted. This confirms the quoted text, not the prospect's purchasing intent or every generated inference.
+- Source pages are crawled first (official homepage fallback if necessary). The email stage selects an exact 6–25 word quote from the fetched text and drafts from it; the quote is matched against that text before the result is accepted. This confirms the quoted text, not the prospect's purchasing intent or every generated inference.
 - Emails are drafts: subject lowercase, <=6 words, no emoji; <=6 short sentences and a final question. A separate model pass checks the drafts against verified quotes and the offer; this is an additional guard, not a guarantee. Review before sending.
 - No Icypeas, Findymail or FullEnrich credentials are connected yet. Results provide a company contact page and a suggested decision-maker role. They do not claim verified personal email addresses.
 - No browser-rendering fallback yet. Blocked or JavaScript-only source pages can pause the verification step. HTTP safety rejects non-public hostnames/IPs, non-HTTPS sources, credentials and custom ports and checks DNS for redirects; DNS rebinding remains a limitation of preflight DNS plus fetch and should be hardened before untrusted public deployment.
