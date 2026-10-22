@@ -1,0 +1,10 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "clientflock",
+  "main": "index.mjs",
+  "compatibility_date": "2026-05-15",
+  "assets": {"directory":"../public","binding":"ASSETS","run_worker_first":["/","/index.html","/split.html","/api/*"]},
+  "rules":[{"type":"Text","globs":["**/*.html"],"fallthrough":true}],
+  "d1_databases":[{"binding":"DB","database_name":"clientflock","migrations_dir":"../drizzle"}],
+  "vars":{"OPENAI_MODEL":"gpt-6-luna","DAILY_SEARCH_LIMIT":"20","DAILY_PROVIDER_LIMIT":"100"}
+}
