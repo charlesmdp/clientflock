@@ -7,3 +7,11 @@ test('completed cache returned without provider calls',async()=>{const env={DB:d
 test('descriptions do not enter the shared cache',async()=>{const env={DB:db(),OPENAI_API_KEY:'test'};const input={mode:'description',offering:'We design hotel websites in France'};const a=await(await api(req('/api/search',input),env)).json(),b=await(await api(req('/api/search',input),env)).json();assert.notEqual(a.id,b.id);});
 test('cross-origin starts fail and missing setup is explicit',async()=>{const env={DB:db(),OPENAI_API_KEY:'test'};const r=new Request('https://clientflock.test/api/search',{method:'POST',headers:{origin:'https://evil.test','content-type':'application/json'},body:'{}'});assert.equal((await api(r,env)).status,403);assert.equal((await api(req('/api/search',{}),{})).status,503);});
 test('email contract rejects forbidden subjects and closings',()=>{validateEmail({subject:'your new studio',email:'You opened a studio yesterday. Would a quick chat help?'});assert.throws(()=>validateEmail({subject:'Hello there',email:'Hi?'}));assert.throws(()=>validateEmail({subject:'hello',email:'Let me know.'}));});
+test('concurrent advances launch one provider job and web search avoids JSON mode',async()=>{
+ const original=globalThis.fetch,env={DB:db(),OPENAI_API_KEY:'test'};let calls=0,payload;
+ globalThis.fetch=async(_url,options)=>{calls++;payload=JSON.parse(options.body);return Response.json({id:'resp_test',status:'in_progress'})};
+ try{const job=await(await api(req('/api/search',{website:'calendly.com'}),env)).json();await Promise.all([api(req('/api/search/'+job.id+'/advance',{}),env),api(req('/api/search/'+job.id+'/advance',{}),env)]);assert.equal(calls,1);assert.equal(payload.tool_choice,'required');assert.equal(payload.text,undefined);assert.equal(payload.background,true);
+ globalThis.fetch=async()=>Response.json({status:'completed',output:[{type:'web_search_call',action:{sources:[{url:'https://calendly.com',title:'Calendly'}]}},{type:'message',content:[{type:'output_text',text:JSON.stringify({profile:{name:'Calendly',offer:'Scheduling software'},sources:[]})}]}]});
+ const result=await(await api(req('/api/search/'+job.id+'/advance',{}),env)).json();assert.equal(result.stage,1);assert.equal(result.data.understanding.citations[0].url,'https://calendly.com');
+ }finally{globalThis.fetch=original}
+});

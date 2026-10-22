@@ -89,7 +89,7 @@ async function advance(env,row){
    const response=await openai(env,'responses',{model:env.OPENAI_MODEL||'gpt-6-luna',background:true,store:true,instructions:base,input:prompt(row.stage,input,data),max_output_tokens:10000,reasoning:{effort:'low'},...(!search?{text:{format:{type:'json_object'}}}:{}),...(search?{tool_choice:'required',tools:[{type:'web_search'}],include:['web_search_call.action.sources']}:{} )});
    await env.DB.prepare('UPDATE searches SET response_id=?,attempts=attempts+1,lease=NULL,lease_until=0,updated_at=? WHERE id=? AND lease=?').bind(response.id,Date.now(),row.id,lease).run();
   }else{
-   const response=await openai(env,'responses/'+encodeURIComponent(row.response_id));
+   const response=await openai(env,'responses/'+encodeURIComponent(row.response_id)+'?include%5B%5D=web_search_call.action.sources');
    if(['queued','in_progress'].includes(response.status)){await env.DB.prepare('UPDATE searches SET lease=NULL,lease_until=0 WHERE id=? AND lease=?').bind(row.id,lease).run();}
    else if(response.status!=='completed')throw Error('The provider did not finish this research step.');
    else {
