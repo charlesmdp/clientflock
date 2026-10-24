@@ -6,8 +6,13 @@ const COOLDOWN = 3000;
 const AUTH_COOLDOWN = 30000;
 const AUTH_MESSAGE = 'Icypeas authentication was rejected. Use the API Key, not the API Secret, in the Cloudflare runtime secret ICYPEAS_API_KEY, deploy it, then retry.';
 const LEGACY_AUTH_MESSAGE = 'Icypeas authentication was rejected. Check the server API key.';
+const PEOPLE_MESSAGE = 'Icypeas returned an unsupported people response. No email search was started.';
+const PEOPLE_PARSER_VERSION = 2;
 const RESUME_PHASE = {discover:'discover',create:'person_ready',poll:'poll'};
 const retryableAuth = entry => entry?.status === 'error' && !!RESUME_PHASE[entry.lastOperation] && (entry.errorCode === 'auth_configuration' || entry.message === LEGACY_AUTH_MESSAGE);
+const hasDiscovery = entry => !!entry && Object.hasOwn(entry,'discoveryPayload');
+const retryablePeople = entry => entry?.status === 'error' && entry.lastOperation === 'discover' && !entry.providerId && entry.phase !== 'requesting' && (entry.errorCode === 'people_response' || entry.message === PEOPLE_MESSAGE);
+const canRetry = (entry,body) => body.retry === true && (retryableAuth(entry) || (retryablePeople(entry) && (hasDiscovery(entry) || (body.allowNewLookup === true && !entry.peopleRecoveryCount))));
 const response = (contact, status = 200, retryAfterMs) => Response.json({contact, ...(retryAfterMs ? {retryAfterMs} : {})}, {
  status, headers: {'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', ...(retryAfterMs ? {'Retry-After':String(Math.ceil(retryAfterMs / 1000))} : {})}
 });
@@ -23,6 +28,9 @@ export function publicContact(entry) {
  const result=Object.fromEntries(['status','person','email','certainty','message','retryable','errorCode'].filter(k => entry?.[k] !== undefined).map(k => [k, entry[k]]));
  // Project the exact legacy 401/403 error into the new retry contract as well.
  if(retryableAuth(entry))Object.assign(result,{errorCode:'auth_configuration',retryable:true,message:AUTH_MESSAGE});
+ if(retryablePeople(entry))Object.assign(result,{errorCode:'people_response',retryable:hasDiscovery(entry)||!entry.peopleRecoveryCount,requiresNewLookup:!hasDiscovery(entry),message:hasDiscovery(entry)
+  ? 'Icypeas returned a people response that could not be read. The saved response can be retried without another Icypeas lookup.'
+  : 'The earlier Icypeas people response could not be read and was not saved. Retrying runs a new Icypeas lookup and may use credits. No email search was started.'});
  return result;
 }
 function publicProfile(value) {
@@ -31,34 +39,61 @@ function publicProfile(value) {
 }
 const titlesFor = role => {
  const text = clean(role, 160).toLowerCase();
+ const ownership=/owner|founder|co[-\s]?founder|ceo|chief executive/.test(text);
+ if(ownership && /operat|manager/.test(text))return ['Owner','Business Owner','Founder','Co-Founder','General Manager','Operations Manager','Head of Operations','Operations Director'];
+ if(ownership)return ['Owner','Business Owner','Founder','Co-Founder','CEO','Chief Executive Officer'];
  if (/market|growth|commercial|sales/.test(text)) return ['Head of Marketing','Head of Growth','Marketing Director'];
- if (/operat|directeur|manager/.test(text)) return ['Head of Operations','Operations Director','Founder'];
- if (/tech|develop|engineer|cto/.test(text)) return ['CTO','Head of Engineering','Founder'];
- return ['Founder','CEO','Head of Operations'];
+ if (/operat|directeur|manager/.test(text)) return ['Head of Operations','Operations Director','Operations Manager','General Manager','Owner','Founder'];
+ if (/tech|develop|engineer|cto/.test(text)) return ['CTO','Chief Technology Officer','Head of Engineering','Founder','Co-Founder'];
+ return ['Founder','Co-Founder','CEO','Chief Executive Officer','Owner','Business Owner','Head of Operations'];
 };
+const roleWords = title => title.toLowerCase().replace(/chief executive officer/g,'ceo').replace(/chief technology officer/g,'cto').replace(/co[-\s]?founder/g,'founder').replace(/business owner/g,'owner').replace(/general manager/g,'general_manager').split(/[^\p{L}\p{N}_]+/u).filter(word=>word.length>2&&!['head','director','chief','officer','manager','the','business'].includes(word));
 
 export function selectPerson(payload, companyDomain, desiredRole = '') {
  // Accept explicit person lists, never arbitrary nested data or scalar values.
- const list = [payload?.people, payload?.items, payload?.results, payload?.data?.people, payload?.data?.items, payload?.data?.results].find(Array.isArray);
- if (!list) throw Error('Icypeas returned an unsupported people response. No email search was started.');
- const desired = titlesFor(desiredRole).map(x => x.toLowerCase().split(/\W+/).filter(x => x.length > 2 && !['head','director','chief','officer','the'].includes(x)));
+ // Official /leads-db/find-people/ response schema: leads[].lastJobTitle / lastCompanyWebsite.
+ const list = [payload?.leads, payload?.people, payload?.items, payload?.results, payload?.data?.people, payload?.data?.items, payload?.data?.results].find(Array.isArray);
+ if (!list) throw Object.assign(Error(PEOPLE_MESSAGE),{code:'people_response'});
+ const desired = titlesFor(desiredRole).map(roleWords);
  const candidates = [];
  for (const item of list.slice(0, 3)) {
   if (!item || typeof item !== 'object') continue;
   const firstName = clean(item.firstname || item.firstName || item.first_name, 80);
   const lastName = clean(item.lastname || item.lastName || item.last_name, 80);
-  const title = clean(item.currentJobTitle || item.jobTitle || item.title);
-  const company = domain(item.currentCompanyWebsite || item.companyWebsite || item.currentCompany?.website || '');
+  const title = clean(item.lastJobTitle || item.currentJobTitle || item.jobTitle || item.title);
+  const company = domain(item.lastCompanyWebsite || item.currentCompanyWebsite || item.companyWebsite || item.currentCompany?.website || '');
   const profileUrl = publicProfile(item.linkedinUrl || item.linkedin_url || item.profileUrl || item.linkedin || '');
   if (!firstName || !lastName || !title || !company || company !== companyDomain || !profileUrl || item.isCurrent === false || item.current === false) continue;
   if (![firstName,lastName].every(x => /^[\p{L}\p{M}][\p{L}\p{M}\s.'’\-]{0,79}$/u.test(x))) continue;
-  const normalized = title.toLowerCase();
+  const normalized = roleWords(title);
   const score = Math.max(...desired.map(words => words.filter(word => normalized.includes(word)).length));
   if (!score) continue;
   candidates.push({firstName,lastName,fullName:firstName+' '+lastName,title,profileUrl,score});
  }
  if (!candidates.length && list.length) throw Error('No current decision maker could be safely matched to this company’s domain and public profile.');
  return candidates.sort((a,b) => b.score-a.score)[0] || null;
+}
+
+// Retain a bounded server-only response until the search expires (the normal search TTL).
+// It is saved before parsing so parser changes never need to repeat a paid discovery call.
+function discoverySnapshot(payload) {
+ let remaining=24000,nodes=400;
+ const copy=(value,depth=0)=>{
+  if(--nodes<0||depth>5||remaining<=0)return null;
+  if(value===null||typeof value==='boolean'||typeof value==='number')return value;
+  if(typeof value==='string'){const result=value.slice(0,Math.min(1500,remaining));remaining-=result.length;return result;}
+  if(Array.isArray(value))return value.slice(0,3).map(item=>copy(item,depth+1));
+  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).slice(0,40).filter(([key])=>!/(?:authorization|secret|password|token|api[_-]?key)/i.test(key)).map(([key,item])=>[key.slice(0,80),copy(item,depth+1)]));
+  return null;
+ };
+ return copy(payload);
+}
+function applyDiscovery(entry,companyDomain,desiredRole) {
+ const person=selectPerson(entry.discoveryPayload,companyDomain,desiredRole);
+ entry.discoveryParserVersion=PEOPLE_PARSER_VERSION;
+ delete entry.errorCode;delete entry.retryable;
+ if(!person)Object.assign(entry,{status:'not_found',phase:'done',message:'No matching current decision maker was found.'});
+ else {const {score,...identity}=person;Object.assign(entry,{status:'working',person:identity,phase:'person_ready',message:'A relevant decision maker was found. Preparing their professional email lookup.'});}
 }
 
 export function parseEmailResult(payload, providerId, companyDomain) {
@@ -85,6 +120,12 @@ async function takeBudget(db,key,max) {
  return !!await db.prepare('INSERT INTO budgets(key,count) VALUES(?,1) ON CONFLICT(key) DO UPDATE SET count=count+1 WHERE count < ? RETURNING count').bind(key,max).first();
 }
 const limit = (value, fallback, max) => Number.isFinite(Number(value)) && Number(value)>0 ? Math.min(max,Math.floor(Number(value))) : fallback;
+async function dailyLookupBudget(request,env) {
+ const day=new Date().toISOString().slice(0,10);
+ const identity=await digest(request.headers.get('cf-connecting-ip')||request.headers.get('oai-authenticated-user-id')||'local');
+ return await takeBudget(env.DB,'icypeas:user:'+day+':'+identity,limit(env.ICYPEAS_USER_DAILY_LIMIT,9,30)) &&
+  await takeBudget(env.DB,'icypeas:daily:'+day,limit(env.ICYPEAS_DAILY_CONTACT_LIMIT,30,100));
+}
 async function provider(key,path,body) {
  const res = await fetch(API+path,{method:'POST',headers:{Authorization:key.trim(),'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
  if (res.status === 401 || res.status === 403) throw Object.assign(Error(AUTH_MESSAGE),{code:'auth_configuration'});
@@ -109,8 +150,7 @@ export async function handleContacts(request,env,row) {
  let data;
  try {data=JSON.parse(row.data);}catch{return response({status:'error',message:'This search could not be read.'},500);}
  const cached=data.contacts?.[index];
- const explicitRetry=body.retry === true;
- if (FINAL.has(cached?.status) && !(explicitRetry && retryableAuth(cached))) return response(publicContact(cached),200,retryableAuth(cached)?Math.max(0,(cached.authRetryAt||0)-Date.now()):undefined);
+ if (FINAL.has(cached?.status) && !canRetry(cached,body)) return response(publicContact(cached),200,retryableAuth(cached)?Math.max(0,(cached.authRetryAt||0)-Date.now()):undefined);
  const apiKey=typeof env.ICYPEAS_API_KEY === 'string' ? env.ICYPEAS_API_KEY.trim() : '';
  if (!apiKey) return response({status:'skipped',message:'Professional email discovery is not connected yet. Add the Icypeas API Key as the runtime secret ICYPEAS_API_KEY.'},503);
  const now=Date.now(),lease=crypto.randomUUID();
@@ -124,13 +164,23 @@ export async function handleContacts(request,env,row) {
   if (!data.contactLookup || typeof data.contactLookup!=='object') data.contactLookup={};
   entry=data.contacts[index];
   if (FINAL.has(entry?.status)) {
-   if(!(explicitRetry && retryableAuth(entry))) {await save(env,row,lease,data);return response(publicContact(entry));}
-   const currentKeyHash=await digest(apiKey);
-   const authWait=entry.authKeyHash === currentKeyHash ? Math.max(0,(entry.authRetryAt||0)-Date.now()) : 0;
-   if(authWait) {await save(env,row,lease,data);return response(publicContact(entry),429,authWait);}
-   // Only a definite 401/403 may resume a previous operation. Unknown paid outcomes never enter this branch.
-   entry.phase=RESUME_PHASE[entry.lastOperation];
-   entry.status='working';entry.message='Retrying Icypeas with the current API Key.';
+   if(!canRetry(entry,body)) {await save(env,row,lease,data);return response(publicContact(entry));}
+   if(retryableAuth(entry)) {
+    const currentKeyHash=await digest(apiKey);
+    const authWait=entry.authKeyHash === currentKeyHash ? Math.max(0,(entry.authRetryAt||0)-Date.now()) : 0;
+    if(authWait) {await save(env,row,lease,data);return response(publicContact(entry),429,authWait);}
+    // Only a definite 401/403 may resume a previous operation. Unknown paid outcomes never enter this branch.
+    entry.phase=RESUME_PHASE[entry.lastOperation];
+    entry.message='Retrying Icypeas with the current API Key.';
+   } else if(hasDiscovery(entry)) {
+    entry.phase='parse_people';entry.message='Reading the saved Icypeas people response.';
+   } else {
+    // Old parser failures discarded the response. One explicitly acknowledged new discovery is allowed.
+    if(!await dailyLookupBudget(request,env)) {await save(env,row,lease,data);return response({...publicContact(entry),message:'The daily contact lookup limit has been reached. Try again tomorrow.'},429);}
+    entry.peopleRecoveryCount=(entry.peopleRecoveryCount||0)+1;
+    entry.phase='discover';entry.message='Running the new Icypeas lookup you requested.';
+   }
+   entry.status='working';
    delete entry.retryable;delete entry.errorCode;delete entry.authRetryAt;delete entry.authKeyHash;
   }
   const lead=data.leads?.[index];
@@ -140,18 +190,22 @@ export async function handleContacts(request,env,row) {
    await save(env,row,lease,data);return response(publicContact(entry));
   }
   if (entry?.phase==='requesting') {
-   entry.status='error';entry.message='The previous provider request has an unknown outcome. It will not be resubmitted automatically, to avoid duplicate charges.';
+   entry.status='error';entry.retryable=false;delete entry.errorCode;
+   entry.message='The previous provider request has an unknown outcome. It will not be resubmitted automatically, to avoid duplicate charges.';
    await save(env,row,lease,data);return response(publicContact(entry));
+  }
+  if(entry?.phase==='parse_people' && hasDiscovery(entry)) {
+   operation='discover';entry.lastOperation='discover';
+   applyDiscovery(entry,companyDomain,lead.roleToContact);
+   if(!await save(env,row,lease,data))return response({status:'error',message:'The saved provider response could not be updated. No new lookup was submitted.'},500);
+   return response(publicContact(entry),entry.status==='working'?202:200,entry.status==='working'?COOLDOWN:undefined);
   }
   const wait=Math.max(0,(data.contactLookup.nextAt||0)-Date.now());
   if (wait) {await save(env,row,lease,data);return response(entry?publicContact(entry):{status:'working',message:'Please wait briefly before the next contact lookup.'},202,wait);}
   if (!entry) {
    const count=Object.values(data.contacts).filter(x=>x?.startedAt).length;
    if(count>=3){await save(env,row,lease,data);return response({status:'skipped',message:'This search has reached its three-contact lookup limit.'},429);}
-   const day=new Date().toISOString().slice(0,10);
-   const identity=await digest(request.headers.get('cf-connecting-ip')||request.headers.get('oai-authenticated-user-id')||'local');
-   if (!await takeBudget(env.DB,'icypeas:user:'+day+':'+identity,limit(env.ICYPEAS_USER_DAILY_LIMIT,9,30)) ||
-       !await takeBudget(env.DB,'icypeas:daily:'+day,limit(env.ICYPEAS_DAILY_CONTACT_LIMIT,30,100))) {
+   if (!await dailyLookupBudget(request,env)) {
     await save(env,row,lease,data);return response({status:'skipped',message:'The daily contact lookup limit has been reached. Try again tomorrow.'},429);
    }
    entry=data.contacts[index]={status:'working',phase:'discover',domain:companyDomain,startedAt:Date.now(),message:'Looking for a relevant current decision maker.'};
@@ -178,9 +232,9 @@ export async function handleContacts(request,env,row) {
   if(!await save(env,row,lease,data,false))return response({status:'working',message:'This lookup is already being handled.'},202,COOLDOWN);
   if(operation==='discover') {
    const payload=await provider(apiKey,'find-people',{query:{currentCompanyWebsite:{include:[companyDomain]},currentJobTitle:{include:titlesFor(lead.roleToContact)}},pagination:{size:3}});
-   const person=selectPerson(payload,companyDomain,lead.roleToContact);
-   if(!person){Object.assign(entry,{status:'not_found',phase:'done',message:'No matching current decision maker was found.'});}
-   else {const {score,...identity}=person;Object.assign(entry,{person:identity,phase:'person_ready',message:'A relevant decision maker was found. Preparing their professional email lookup.'});}
+   entry.discoveryPayload=discoverySnapshot(payload);entry.discoveryCapturedAt=Date.now();entry.phase='parse_people';
+   if(!await save(env,row,lease,data,false))return response({status:'error',message:'The provider response could not be saved. No new lookup will be submitted automatically.'},500);
+   applyDiscovery(entry,companyDomain,lead.roleToContact);
   } else if(operation==='create') {
    const externalId='clientflock:'+row.id+':'+index;
    const payload=await provider(apiKey,'email-search',{firstname:entry.person.firstName,lastname:entry.person.lastName,domainOrCompany:companyDomain,custom:{externalId}});
@@ -205,7 +259,13 @@ export async function handleContacts(request,env,row) {
    await save(env,row,lease,data).catch(()=>{});
    return response(publicContact(entry),502,AUTH_COOLDOWN);
   }
+  if(error?.code==='people_response' && operation==='discover' && hasDiscovery(entry)) {
+   Object.assign(entry,{errorCode:'people_response',retryable:true,message:PEOPLE_MESSAGE,phase:'parse_people'});
+   await save(env,row,lease,data).catch(()=>{});
+   return response(publicContact(entry),502);
+  }
   entry.retryable=false;
+  delete entry.errorCode;
   entry.message=error?.name==='AbortError'||error?.name==='TimeoutError'||error instanceof TypeError
    ? 'The provider request has an unknown outcome. It will not be repeated automatically, to avoid duplicate charges.'
    : clean(error?.message,300)||'Contact lookup is unavailable. No email address was assumed.';

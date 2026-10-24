@@ -4,11 +4,25 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {handleContacts,selectPerson,parseEmailResult,publicContact} from '../server/contacts.mjs';
 function db(){const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../drizzle/0000_overrated_lady_deathstrike.sql',import.meta.url),'utf8'));return {prepare(q){return {bind(...v){return {first:async()=>sql.prepare(q).get(...v),run:async()=>sql.prepare(q).run(...v)}}}}};}
-const request=(index=0,retry=false)=>new Request('https://clientflock.test/api/search/job/contacts',{method:'POST',headers:{'Content-Type':'application/json','cf-connecting-ip':'127.0.0.1'},body:JSON.stringify({leadIndex:index,...(retry?{retry:true}:{})})});
+const request=(index=0,retry=false,allowNewLookup=false)=>new Request('https://clientflock.test/api/search/job/contacts',{method:'POST',headers:{'Content-Type':'application/json','cf-connecting-ip':'127.0.0.1'},body:JSON.stringify({leadIndex:index,...(retry?{retry:true}:{}),...(allowNewLookup?{allowNewLookup:true}:{})})});
 async function setup(){const env={DB:db(),ICYPEAS_API_KEY:'test-not-real'};const now=Date.now();const id=crypto.randomUUID();const data={qualification:{version:1,status:'verified',requiredPlatforms:[]},leads:[{name:'Acme',website:'https://acme.com',roleToContact:'Founder'},{name:'Other',website:'https://other.com',roleToContact:'Founder'},{name:'Third',website:'https://third.com',roleToContact:'Founder'}]};await env.DB.prepare("INSERT INTO searches(id,cache_key,input,data,status,created_at,updated_at,expires_at) VALUES(?,?,?,?,?,?,?,?)").bind(id,id,'{}',JSON.stringify(data),'complete',now,now,now+86400000).run();return {env,id,row:()=>env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(id).first()};}
 async function clearCooldown(job){const row=await job.row();const data=JSON.parse(row.data);data.contactLookup={...data.contactLookup,nextAt:0};await job.env.DB.prepare('UPDATE searches SET data=? WHERE id=?').bind(JSON.stringify(data),job.id).run();}
+async function seedContact(job,contact){const data=JSON.parse((await job.row()).data);data.contacts={0:contact};await job.env.DB.prepare('UPDATE searches SET data=? WHERE id=?').bind(JSON.stringify(data),job.id).run();}
 const person={firstname:'Alex',lastname:'Miller',currentJobTitle:'Founder',currentCompanyWebsite:'https://acme.com',linkedinUrl:'https://www.linkedin.com/in/alex-miller/'};
+// Field names from the response accordion at https://api-doc.icypeas.com/leads-db/find-people/
+// (official Docusaurus chunk assets/js/b780ae89.4ffd5d17.js). Identity below is fictional.
+const officialPerson={firstname:'Alex',lastname:'Miller',lastJobTitle:'Chief Executive Officer',lastCompanyWebsite:'https://www.acme.com',profileUrl:'https://www.linkedin.com/in/alex-miller/'};
 test('people require explicit current company, real name and professional profile',()=>{assert.equal(selectPerson({people:[person]},'acme.com').fullName,'Alex Miller');assert.throws(()=>selectPerson({people:[{...person,currentCompanyWebsite:'other.com'}]},'acme.com'));assert.throws(()=>selectPerson({people:[{...person,linkedinUrl:'https://example.com/private'}]},'acme.com'));assert.throws(()=>selectPerson({success:true},'acme.com'));assert.equal(selectPerson({people:[]},'acme.com'),null);});
+test('documented leads envelope and most-recent company/job fields match CEO, co-founder and shop owner roles',()=>{
+ const payload=record=>({success:true,total:1,leads:[record],pagination:{size:3,token:'unused'}});
+ assert.equal(selectPerson(payload(officialPerson),'acme.com','CEO').fullName,'Alex Miller');
+ for(const title of ['Co-Founder','CoFounder','Business Owner','Owner','General Manager','Workshop Operations Manager'])assert.equal(selectPerson(payload({...officialPerson,lastJobTitle:title}),'acme.com','Owner or workshop operations manager').title,title);
+ assert.equal(selectPerson({success:true,total:0,leads:[]},'acme.com'),null);
+ assert.throws(()=>selectPerson(payload({...officialPerson,lastCompanyWebsite:'https://other.com'}),'acme.com'));
+ assert.throws(()=>selectPerson(payload({...officialPerson,lastJobTitle:'Marketing Manager'}),'acme.com','Owner or workshop operations manager'));
+ assert.throws(()=>selectPerson(payload({firstname:'Alex',lastname:'Miller'}),'acme.com'),'optional provider fields cannot be invented to establish a match');
+ assert.throws(()=>selectPerson({success:true,leads:[{name:'Acme',website:'https://acme.com'}]},'acme.com'),'a company example must never be treated as a person');
+});
 test('provider certainty controls result status, without inventing or promoting email addresses',()=>{
  const result=(certainty,email='alex@acme.com')=>({items:[{_id:'p1',status:'DEBITED',results:{emails:[{email,certainty}]}}]});
  assert.equal(parseEmailResult(result('ULTRA_SURE'),'p1','acme.com').status,'found');
@@ -142,4 +156,77 @@ test('definite auth rejection resumes create or poll without repeating prior pai
   if(operation==='create'){assert.equal(resumed.contact.status,'working');assert.equal(JSON.parse((await job.row()).data).contacts[0].providerId,'new-provider-id');}
   else {assert.equal(resumed.contact.status,'found');assert.deepEqual(calls[1].body,{id:'saved-provider-id'});}
  }}finally{globalThis.fetch=original;}
+});
+
+test('official discovery response is saved privately before a shop-owner email search is prepared',async()=>{
+ const original=globalThis.fetch;const job=await setup();let calls=0;
+ const data=JSON.parse((await job.row()).data);data.leads[0].roleToContact='Owner or workshop operations manager';await job.env.DB.prepare('UPDATE searches SET data=? WHERE id=?').bind(JSON.stringify(data),job.id).run();
+ globalThis.fetch=async(url,options)=>{
+  calls++;assert.ok(url.endsWith('find-people'));const body=JSON.parse(options.body);
+  assert.deepEqual(body.query.currentCompanyWebsite.include,['acme.com']);assert.equal(body.pagination.size,3);
+  for(const title of ['Owner','Business Owner','General Manager','Co-Founder'])assert.ok(body.query.currentJobTitle.include.includes(title));
+  return Response.json({success:true,total:1,leads:[{...officialPerson,lastJobTitle:'Business Owner',description:'x'.repeat(100000)}],pagination:{size:3,token:'private-pagination'},apiKey:'must-not-be-retained'});
+ };
+ try{
+  const result=await(await handleContacts(request(),job.env,await job.row())).json();
+  assert.equal(calls,1);assert.equal(result.contact.person.title,'Business Owner');assert.equal(result.contact.status,'working');
+  assert.equal(result.contact.discoveryPayload,undefined);assert.equal(result.contact.discoveryCapturedAt,undefined);
+  const saved=JSON.parse((await job.row()).data).contacts[0];
+  assert.equal(saved.phase,'person_ready');assert.equal(saved.discoveryParserVersion,2);assert.ok(saved.discoveryCapturedAt>0);
+  assert.equal(saved.discoveryPayload.leads[0].lastCompanyWebsite,'https://www.acme.com');assert.equal(saved.discoveryPayload.apiKey,undefined);assert.equal(saved.discoveryPayload.pagination.token,undefined);
+  assert.ok(JSON.stringify(saved.discoveryPayload).length<5000,'provider strings are bounded');
+ }finally{globalThis.fetch=original;}
+});
+
+test('unsupported responses are retained and local retries cannot repeat discovery or start email search',async()=>{
+ const original=globalThis.fetch;const job=await setup();let calls=0;
+ globalThis.fetch=async()=>{calls++;return Response.json({success:true,unexpected:{records:[{name:'Company, not a person'}]}});};
+ try{
+  const failed=await(await handleContacts(request(),job.env,await job.row())).json();
+  assert.equal(failed.contact.errorCode,'people_response');assert.equal(failed.contact.retryable,true);assert.equal(failed.contact.requiresNewLookup,false);assert.equal(calls,1);
+  let saved=JSON.parse((await job.row()).data).contacts[0];assert.ok(saved.discoveryPayload);assert.equal(saved.phase,'parse_people');assert.equal(saved.providerId,undefined);
+  await handleContacts(request(),job.env,await job.row());
+  await handleContacts(request(0,true,true),job.env,await job.row());assert.equal(calls,1,'even allowNewLookup cannot force a paid resubmission when a response is saved');
+  saved=JSON.parse((await job.row()).data).contacts[0];assert.equal(saved.errorCode,'people_response');
+ }finally{globalThis.fetch=original;}
+});
+
+test('saved old-parser failures and interrupted parsing recover locally without a provider call',async()=>{
+ const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('Must not contact provider while reparsing');};
+ try {for(const status of ['error','working']){
+  const job=await setup();
+  await seedContact(job,{status,phase:'parse_people',lastOperation:'discover',startedAt:123,errorCode:status==='error'?'people_response':undefined,message:'Icypeas returned an unsupported people response. No email search was started.',discoveryPayload:{success:true,total:1,leads:[officialPerson]}});
+  const result=await(await handleContacts(request(0,status==='error'),job.env,await job.row())).json();
+  assert.equal(result.contact.status,'working');assert.equal(result.contact.person.fullName,'Alex Miller');assert.equal(result.contact.errorCode,undefined);assert.equal(result.contact.requiresNewLookup,undefined);
+  assert.equal(JSON.parse((await job.row()).data).contacts[0].phase,'person_ready');assert.equal(calls,0);
+ }}finally{globalThis.fetch=original;}
+});
+
+test('legacy discarded responses require explicit credit consent and concurrent retries discover only once',async()=>{
+ const original=globalThis.fetch;const job=await setup();let calls=0;
+ const legacy={status:'error',phase:'done',lastOperation:'discover',startedAt:123,message:'Icypeas returned an unsupported people response. No email search was started.'};
+ globalThis.fetch=async(url)=>{calls++;assert.ok(url.endsWith('find-people'));return Response.json({success:true,total:1,leads:[officialPerson]});};
+ try{
+  await seedContact(job,legacy);
+  const cached=await(await handleContacts(request(),job.env,await job.row())).json();
+  assert.equal(cached.contact.errorCode,'people_response');assert.equal(cached.contact.retryable,true);assert.equal(cached.contact.requiresNewLookup,true);assert.match(cached.contact.message,/may use credits/);
+  await handleContacts(request(0,true),job.env,await job.row());assert.equal(calls,0,'generic retry never silently incurs a replacement discovery charge');
+  const row=await job.row();await Promise.all([handleContacts(request(0,true,true),job.env,row),handleContacts(request(0,true,true),job.env,row)]);
+  assert.equal(calls,1);const saved=JSON.parse((await job.row()).data).contacts[0];assert.equal(saved.peopleRecoveryCount,1);assert.equal(saved.phase,'person_ready');assert.ok(saved.discoveryPayload);
+  const day=new Date().toISOString().slice(0,10);assert.equal((await job.env.DB.prepare('SELECT count FROM budgets WHERE key=?').bind('icypeas:daily:'+day).first()).count,1,'replacement discovery uses the normal daily budget');
+  await seedContact(job,{...legacy,peopleRecoveryCount:1});
+  const stopped=await(await handleContacts(request(0,true,true),job.env,await job.row())).json();assert.equal(stopped.contact.retryable,false);assert.equal(calls,1,'a discarded replacement cannot be repeatedly submitted');
+ }finally{globalThis.fetch=original;}
+});
+
+test('legacy recovery obeys the daily budget and unknown paid create outcomes stay nonretryable',async()=>{
+ const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw new DOMException('Timed out','TimeoutError');};
+ try{
+  const capped=await setup();await seedContact(capped,{status:'error',phase:'done',lastOperation:'discover',startedAt:123,message:'Icypeas returned an unsupported people response. No email search was started.'});
+  await capped.env.DB.prepare('INSERT INTO budgets(key,count) VALUES(?,?)').bind('icypeas:daily:'+new Date().toISOString().slice(0,10),30).run();
+  assert.equal((await handleContacts(request(0,true,true),capped.env,await capped.row())).status,429);assert.equal(calls,0);
+  const ambiguous=await setup();await seedContact(ambiguous,{status:'working',phase:'person_ready',startedAt:123,person:{firstName:'Alex',lastName:'Miller'}});
+  const failed=await(await handleContacts(request(),ambiguous.env,await ambiguous.row())).json();assert.equal(failed.contact.retryable,false);assert.match(failed.contact.message,/unknown outcome/);
+  await clearCooldown(ambiguous);await handleContacts(request(0,true,true),ambiguous.env,await ambiguous.row());assert.equal(calls,1,'credit consent is never an override for an unknown email-create outcome');
+ }finally{globalThis.fetch=original;}
 });
