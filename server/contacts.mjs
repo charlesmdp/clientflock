@@ -3,6 +3,11 @@ const API = 'https://app.icypeas.com/api/';
 const FINAL = new Set(['skipped', 'not_found', 'risky', 'found', 'error']);
 const WAITING = new Set(['NONE', 'SCHEDULED', 'IN_PROGRESS']);
 const COOLDOWN = 3000;
+const AUTH_COOLDOWN = 30000;
+const AUTH_MESSAGE = 'Icypeas authentication was rejected. Use the API Key, not the API Secret, in the Cloudflare runtime secret ICYPEAS_API_KEY, deploy it, then retry.';
+const LEGACY_AUTH_MESSAGE = 'Icypeas authentication was rejected. Check the server API key.';
+const RESUME_PHASE = {discover:'discover',create:'person_ready',poll:'poll'};
+const retryableAuth = entry => entry?.status === 'error' && !!RESUME_PHASE[entry.lastOperation] && (entry.errorCode === 'auth_configuration' || entry.message === LEGACY_AUTH_MESSAGE);
 const response = (contact, status = 200, retryAfterMs) => Response.json({contact, ...(retryAfterMs ? {retryAfterMs} : {})}, {
  status, headers: {'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', ...(retryAfterMs ? {'Retry-After':String(Math.ceil(retryAfterMs / 1000))} : {})}
 });
@@ -14,7 +19,12 @@ function domain(value) {
  } catch { return null; }
 }
 const sameDomain = (a,b) => a === b || a?.endsWith('.' + b);
-const publicContact = entry => Object.fromEntries(['status','person','email','certainty','message'].filter(k => entry?.[k] !== undefined).map(k => [k, entry[k]]));
+export function publicContact(entry) {
+ const result=Object.fromEntries(['status','person','email','certainty','message','retryable','errorCode'].filter(k => entry?.[k] !== undefined).map(k => [k, entry[k]]));
+ // Project the exact legacy 401/403 error into the new retry contract as well.
+ if(retryableAuth(entry))Object.assign(result,{errorCode:'auth_configuration',retryable:true,message:AUTH_MESSAGE});
+ return result;
+}
 function publicProfile(value) {
  try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port && /(^|\.)linkedin\.com$/i.test(u.hostname) && /^\/in\/[\w%-]+\/?$/i.test(u.pathname) ? u.href : null; }
  catch { return null; }
@@ -76,8 +86,9 @@ async function takeBudget(db,key,max) {
 }
 const limit = (value, fallback, max) => Number.isFinite(Number(value)) && Number(value)>0 ? Math.min(max,Math.floor(Number(value))) : fallback;
 async function provider(key,path,body) {
- const res = await fetch(API+path,{method:'POST',headers:{Authorization:key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
- if (!res.ok) throw Error(res.status === 401 || res.status === 403 ? 'Icypeas authentication was rejected. Check the server API key.' : 'Icypeas could not complete this request. No automatic resubmission will be made.');
+ const res = await fetch(API+path,{method:'POST',headers:{Authorization:key.trim(),'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
+ if (res.status === 401 || res.status === 403) throw Object.assign(Error(AUTH_MESSAGE),{code:'auth_configuration'});
+ if (!res.ok) throw Error('Icypeas could not complete this request. No automatic resubmission will be made.');
  const payload = await res.json();
  if (payload?.success === false) throw Error('Icypeas rejected the request. No automatic resubmission will be made.');
  return payload;
@@ -97,8 +108,11 @@ export async function handleContacts(request,env,row) {
  if (row.status!=='complete') return response({status:'skipped',message:'Finish the company research before looking up contacts.'},409);
  let data;
  try {data=JSON.parse(row.data);}catch{return response({status:'error',message:'This search could not be read.'},500);}
- if (FINAL.has(data.contacts?.[index]?.status)) return response(publicContact(data.contacts[index]));
- if (!env.ICYPEAS_API_KEY) return response({status:'skipped',message:'Professional email discovery is not connected yet.'},503);
+ const cached=data.contacts?.[index];
+ const explicitRetry=body.retry === true;
+ if (FINAL.has(cached?.status) && !(explicitRetry && retryableAuth(cached))) return response(publicContact(cached),200,retryableAuth(cached)?Math.max(0,(cached.authRetryAt||0)-Date.now()):undefined);
+ const apiKey=typeof env.ICYPEAS_API_KEY === 'string' ? env.ICYPEAS_API_KEY.trim() : '';
+ if (!apiKey) return response({status:'skipped',message:'Professional email discovery is not connected yet. Add the Icypeas API Key as the runtime secret ICYPEAS_API_KEY.'},503);
  const now=Date.now(),lease=crypto.randomUUID();
  const claimed=await env.DB.prepare("UPDATE searches SET lease=?,lease_until=? WHERE id=? AND lease_until<? AND status='complete' RETURNING id").bind(lease,now+90000,row.id,now).first();
  if (!claimed) return response({status:'working',message:'Another contact lookup is in progress for this search.'},202,COOLDOWN);
@@ -109,7 +123,16 @@ export async function handleContacts(request,env,row) {
   if (!data.contacts || typeof data.contacts!=='object') data.contacts={};
   if (!data.contactLookup || typeof data.contactLookup!=='object') data.contactLookup={};
   entry=data.contacts[index];
-  if (FINAL.has(entry?.status)) {await save(env,row,lease,data);return response(publicContact(entry));}
+  if (FINAL.has(entry?.status)) {
+   if(!(explicitRetry && retryableAuth(entry))) {await save(env,row,lease,data);return response(publicContact(entry));}
+   const currentKeyHash=await digest(apiKey);
+   const authWait=entry.authKeyHash === currentKeyHash ? Math.max(0,(entry.authRetryAt||0)-Date.now()) : 0;
+   if(authWait) {await save(env,row,lease,data);return response(publicContact(entry),429,authWait);}
+   // Only a definite 401/403 may resume a previous operation. Unknown paid outcomes never enter this branch.
+   entry.phase=RESUME_PHASE[entry.lastOperation];
+   entry.status='working';entry.message='Retrying Icypeas with the current API Key.';
+   delete entry.retryable;delete entry.errorCode;delete entry.authRetryAt;delete entry.authKeyHash;
+  }
   const lead=data.leads?.[index];
   const companyDomain=domain(lead?.website || '');
   if (!lead||!companyDomain) {
@@ -154,18 +177,18 @@ export async function handleContacts(request,env,row) {
   // A crash after this durable marker cannot cause another paid create request.
   if(!await save(env,row,lease,data,false))return response({status:'working',message:'This lookup is already being handled.'},202,COOLDOWN);
   if(operation==='discover') {
-   const payload=await provider(env.ICYPEAS_API_KEY,'find-people',{query:{currentCompanyWebsite:{include:[companyDomain]},currentJobTitle:{include:titlesFor(lead.roleToContact)}},pagination:{size:3}});
+   const payload=await provider(apiKey,'find-people',{query:{currentCompanyWebsite:{include:[companyDomain]},currentJobTitle:{include:titlesFor(lead.roleToContact)}},pagination:{size:3}});
    const person=selectPerson(payload,companyDomain,lead.roleToContact);
    if(!person){Object.assign(entry,{status:'not_found',phase:'done',message:'No matching current decision maker was found.'});}
    else {const {score,...identity}=person;Object.assign(entry,{person:identity,phase:'person_ready',message:'A relevant decision maker was found. Preparing their professional email lookup.'});}
   } else if(operation==='create') {
    const externalId='clientflock:'+row.id+':'+index;
-   const payload=await provider(env.ICYPEAS_API_KEY,'email-search',{firstname:entry.person.firstName,lastname:entry.person.lastName,domainOrCompany:companyDomain,custom:{externalId}});
+   const payload=await provider(apiKey,'email-search',{firstname:entry.person.firstName,lastname:entry.person.lastName,domainOrCompany:companyDomain,custom:{externalId}});
    const id=clean(payload?.item?._id,200);
    if(!id)throw Error('Icypeas did not return a search identifier. The request will not be repeated automatically.');
    Object.assign(entry,{providerId:id,phase:'poll',message:'Icypeas is finding and checking the professional email.'});
   } else {
-   const payload=await provider(env.ICYPEAS_API_KEY,'bulk-single-searchs/read',{id:entry.providerId});
+   const payload=await provider(apiKey,'bulk-single-searchs/read',{id:entry.providerId});
    Object.assign(entry,parseEmailResult(payload,entry.providerId,companyDomain));
    if(FINAL.has(entry.status))entry.phase='done';
   }
@@ -175,6 +198,14 @@ export async function handleContacts(request,env,row) {
  } catch(error) {
   if(!entry)entry=data.contacts[index]={};
   entry.status='error';
+  if(error?.code==='auth_configuration' && RESUME_PHASE[operation]) {
+   Object.assign(entry,{errorCode:'auth_configuration',retryable:true,message:AUTH_MESSAGE,phase:RESUME_PHASE[operation],authRetryAt:Date.now()+AUTH_COOLDOWN,authKeyHash:await digest(apiKey)});
+   // A rejected poll did not consume a provider polling attempt.
+   if(operation==='poll')entry.polls=Math.max(0,(entry.polls||1)-1);
+   await save(env,row,lease,data).catch(()=>{});
+   return response(publicContact(entry),502,AUTH_COOLDOWN);
+  }
+  entry.retryable=false;
   entry.message=error?.name==='AbortError'||error?.name==='TimeoutError'||error instanceof TypeError
    ? 'The provider request has an unknown outcome. It will not be repeated automatically, to avoid duplicate charges.'
    : clean(error?.message,300)||'Contact lookup is unavailable. No email address was assumed.';

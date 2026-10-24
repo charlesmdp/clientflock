@@ -1,63 +1,347 @@
 (() => {
- 'use strict';
- const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const safeUrl=s=>{try{const u=new URL(s);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'#'}catch{return '#'}};
- const short=(s,n=100)=>String(s||'').length>n?String(s).slice(0,n).trimEnd()+'…':String(s||'');
- const modal=document.createElement('dialog');modal.className='research-room';modal.setAttribute('aria-label','Your customer discovery');document.body.append(modal);
- let job=null,running=false,opener,generation=0,inputLabel='',activeDoc='mission',activeLead=0,activeView='discovery',setupError='',alertMessage='',contactAvailable=false,contactRunning=false,contactState={},celebrated='';
- const phaseCopy=[['Getting to know you.','First, the business behind the website. What you sell, who you help, and where your next opportunity might be.'],['Finding your superpower.','A sharper way to explain what makes your business useful. Your mission is taking shape.'],['Looking a little further.','The competitors, the changes, the gaps. We’re making room for a different perspective.'],['Thinking outside the usual.','Who else has the problem you solve? We’re connecting your offer to buyers you might not have considered.'],['Following the good leads.','We’re looking for real businesses in your most promising customer group. A reason to connect, not just a name.'],['A little detective work.','Reading the source pages and checking the details behind each potential match.'],['Making the first move easier.','A specific detail. A relevant offer. A short email that sounds like you, not a sales robot.'],['One last thoughtful look.','Checking every opening line against its source before handing your shortlist over.']];
- async function request(path,body){const r=await fetch(path,{...(body!==undefined?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});let data;try{data=await r.json()}catch{throw Error('We couldn’t reach the research service. Please try again.')}if(!r.ok&&!data.contact)throw Error(data.error||'Research is temporarily unavailable.');return data;}
- const date=s=>{const d=new Date(s);return Number.isNaN(d.getTime())?'':d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})};
- const domain=s=>{try{return new URL(s).hostname.replace(/^www\./,'')}catch{return ''}};
- const logo=l=>'<span class="rf-company-logo"><span>'+esc((l.name||'?').slice(0,1))+'</span>'+(safeUrl(l.website)!=='#'?'<img src="'+esc(new URL('/favicon.ico',l.website).href)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'')+'</span>';
- function confetti(){if(!job||celebrated===job.id||matchMedia('(prefers-reduced-motion: reduce)').matches)return;celebrated=job.id;const box=document.createElement('div');box.className='rf-confetti';box.setAttribute('aria-hidden','true');for(let i=0;i<52;i++){const p=document.createElement('i');p.style.cssText='--x:'+((i*37)%100)+'%;--r:'+((i*71)%360)+'deg;--d:'+((i%13)*.08)+'s;--c:'+['#bcb0dc','#d0df91','#e8b690','#f1d778','#252c23'][i%5];box.append(p)}modal.append(box);setTimeout(()=>box.remove(),4500)}
- function render(){
-  const done=job?.status==='complete',failed=job?.status==='failed'||!!setupError,profile=job?.data?.understanding?.profile,docsReady=['mission','market','idealClients'].filter(k=>job?.data?.[k]).length;
-  modal.dataset.state=done?'complete':failed?'paused':'working';
-  const focus=modal.contains(document.activeElement)?document.activeElement?.dataset?.focus:null,scroll=modal.scrollTop;
-  modal.innerHTML='<header class="research-header"><a class="research-brand" href="/"><img src="/assets/swan.svg" alt="">ClientFlock</a><span class="rf-session"><span class="rf-status-dot"></span>'+ (done?'YOUR NEXT CUSTOMERS, A LITTLE CLOSER':failed?'YOUR RESEARCH SPACE':'A LITTLE CURIOSITY. A LOT OF POSSIBILITY.')+'</span><button class="research-close" data-focus="close" aria-label="Close research">×</button></header><main class="rf-main">'+
-  (alertMessage?'<div class="research-alert" role="alert">'+esc(alertMessage)+'</div>':'')+
-  '<div class="rf-project"><span class="rf-project-icon">'+(profile?'✓':'↗')+'</span><span>'+esc(profile?.name||inputLabel||'Your business')+'</span><span class="rf-project-label">'+(job?.cached?'FROM YOUR SAVED RESEARCH':'A FRESH PERSPECTIVE')+'</span></div>'+
-  (done?completeHero():failed?paused():discoveryHero())+
-  '<nav class="rf-view-nav" aria-label="Research views"><button data-view="discovery" data-focus="view-discovery" class="'+(activeView==='discovery'?'selected':'')+'">'+(done?'Your 3 opportunities':'The discovery')+' <span>'+ (done?'03':'✦')+'</span></button><button data-view="playbook" data-focus="view-playbook" class="'+(activeView==='playbook'?'selected':'')+'">Your business playbook <span>'+docsReady+'/3</span></button><span class="rf-saved">'+(job?.cached?'Saved '+esc(date(job.updatedAt)):'Progress saved as we go')+'</span></nav>'+
-  '<div class="rf-view-content">'+(activeView==='playbook'?documents():done?results():discoveryFindings())+'</div><footer class="rf-footer"><img src="/assets/swan.svg" alt=""><p>A fresh pair of eyes on your business.<br><span>'+ (done?'The next conversation is yours.':'You can close this window and return to your research here.')+'</span></p><span>MADE WITH CURIOSITY ✦</span></footer></main>';
-  bind();modal.scrollTop=scroll;if(focus)modal.querySelector('[data-focus="'+CSS.escape(focus)+'"]')?.focus({preventScroll:true});
-  if(done){confetti();checkContacts();}
- }
- function discoveryHero(){const stage=Math.min(job?.stage||0,7),copy=phaseCopy[stage],count=(job?.data?.discovery?.leads||[]).length;
-  return '<section class="rf-discovery-hero"><div class="rf-hero-copy"><span class="rf-eyebrow"><i></i> THE EXPLORATION IS ON</span><h1>Your business.<br>A whole new<br><em>perspective.</em><span class="rf-title-spark">✳</span></h1><p class="rf-hero-description">The right customers aren’t always where you expect. Let’s follow a few unexpected connections.</p><div class="rf-current-step"><span class="rf-current-icon">'+(stage>=4?'◎':'✳')+'</span><div><strong role="status">'+esc(copy[0])+'</strong><p>'+esc(copy[1])+'</p></div></div></div><div class="rf-exploration" aria-label="An illustrated black swan exploring new possibilities"><div class="rf-world-circle"></div><svg class="rf-dotted-path" viewBox="0 0 600 500" aria-hidden="true"><path d="M55 320C-20 170 120 45 290 75S595 150 540 333 150 500 140 345 350 150 510 60"/><path class="rf-path-dash" d="M55 320C-20 170 120 45 290 75S595 150 540 333 150 500 140 345 350 150 510 60"/></svg><img class="rf-explorer" src="/assets/research-swan.png" alt="A curious black swan looking through a telescope"><span class="rf-handnote">a little further<br>than the obvious <span>⤴</span></span><div class="rf-thought rf-thought-one"><span>01 / THE STARTING POINT</span><strong>'+esc(short(job?.data?.understanding?.profile?.offer||'What makes you, you.',72))+'</strong><i>↗</i></div><div class="rf-thought rf-thought-two"><span>'+(job?.data?.idealClients?'A NEW DIRECTION':'THE BETTER QUESTION')+'</span><strong>'+esc(short(job?.data?.idealClients?.priorityList||'Who else needs this?',76))+'</strong><i>✦</i></div><div class="rf-thought rf-thought-three"><span>'+(count?'ON THE SHORTLIST':'THE DESTINATION')+'</span><strong>'+(count?count+' real companies to explore':'3 reasons to say hello.')+'</strong><i>◎</i></div><span class="rf-spark rf-spark-a">✦</span><span class="rf-spark rf-spark-b">✳</span><span class="rf-spark rf-spark-c">✧</span><span class="rf-paper-dot rf-paper-dot-a"></span><span class="rf-paper-dot rf-paper-dot-b"></span></div></section>'+timeline(stage);
- }
- function timeline(stage){return '<div class="rf-timeline" aria-label="Research progress">'+[['01','Understand your business','The offer, the market, the possibilities',0,3],['02','Connect the unexpected','The people who could need you',3,5],['03','Make the introduction','Checked details. Personal first drafts.',5,8]].map(([n,title,detail,start,end])=>'<div class="rf-timeline-item '+(stage>=end?'finished':stage>=start?'active':'')+'"><span>'+(stage>=end?'✓':n)+'</span><div><strong>'+title+'</strong><small>'+detail+'</small></div><i></i></div>').join('')+'</div>';}
- function completeHero(){return '<section class="rf-complete-hero"><div><span class="rf-eyebrow">✦ YOUR EXPLORATION, MADE USEFUL</span><h1>A few good reasons<br>to <em>say hello.</em></h1><p>Three real businesses. A thoughtful angle for each.<br>And the first words to get the conversation going.</p></div><div class="rf-success-art"><img src="/assets/research-swan.png" alt="Your black swan explorer"><span class="rf-match-seal"><b>3</b>new possibilities<small>picked for you ✦</small></span><i>✳</i></div></section>';}
- function paused(){return '<section class="rf-pause-hero"><img src="/assets/research-swan.png" alt="Your swan explorer"><div><span class="rf-eyebrow">A SMALL PAUSE IN THE EXPLORATION</span><h1>Let’s get back<br><em>on the trail.</em></h1><p>'+esc(setupError||job?.error||'We couldn’t finish this step just yet.')+'</p>'+(job?.id?'<button class="research-button" data-retry>Continue this research <span>↗</span></button>':'<button class="research-button" data-restart>Try again <span>↗</span></button>')+'<small>Your completed discoveries are kept safe.</small></div></section>';}
- function discoveryFindings(){const d=job?.data||{},items=[['mission','Your superpower, on paper.','A clear mission and a practical direction.','✳'],['market','The bigger picture.','Competitors, changes and room to grow.','◎'],['idealClients','Your next best audience.','New customer groups, ranked by opportunity.','↗']];
-  return '<section class="rf-discoveries"><div class="rf-section-heading"><div><span class="rf-eyebrow">LITTLE DISCOVERIES, BIGGER POSSIBILITIES</span><h2>Watch the picture come together.</h2></div><span>01 → 02 → 03</span></div><div class="rf-findings-grid">'+items.map(([key,title,detail,symbol],i)=>{const doc=d[key];return '<button class="rf-finding '+(doc?'ready':'pending')+' rf-finding-'+i+'" data-doc="'+key+'" '+(!doc?'disabled':'')+'><span class="rf-finding-art">'+symbol+'<i></i><b>'+String(i+1).padStart(2,'0')+'</b></span><span class="rf-finding-status">'+(doc?'✓ READY TO EXPLORE':'TAKING SHAPE')+'</span><strong>'+esc(doc?.presentation?.title||title)+'</strong><p>'+esc(short(doc?.presentation?.subtitle||detail,145))+'</p><span class="rf-finding-bottom">'+(doc?'Open this discovery <b>↗</b>':'We’ll reveal this as soon as it’s ready.')+'</span></button>'}).join('')+'</div></section>';
- }
- function documents(){return window.ClientFlockDocuments?.render(job?.data||{},activeDoc)||'<p>Your business playbook is taking shape.</p>';}
- function results(){const leads=job?.data?.leads||[];if(!leads.length)return '<p>Your shortlist is being prepared.</p>';activeLead=Math.min(activeLead,leads.length-1);const l=leads[activeLead],contact=contactState[activeLead]||job?.data?.contacts?.[activeLead];
-  return '<section class="rf-results"><div class="rf-section-heading"><div><span class="rf-eyebrow">YOUR HAND-PICKED STARTING POINTS</span><h2>Meet the possibilities.</h2></div><span class="rf-source-note">Sourced companies · Buying interest to explore</span></div><div class="rf-prospect-tabs" role="tablist" aria-label="Potential customers">'+leads.map((lead,i)=>'<button role="tab" id="rf-lead-tab-'+i+'" aria-controls="rf-lead-panel" aria-selected="'+(i===activeLead)+'" tabindex="'+(i===activeLead?'0':'-1')+'" class="rf-prospect-tab '+(i===activeLead?'selected':'')+'" data-lead="'+i+'" data-focus="lead-'+i+'">'+logo(lead)+'<span><small>OPPORTUNITY 0'+(i+1)+'</small><strong>'+esc(lead.name)+'</strong><span>'+esc(domain(lead.website))+'</span></span><i>↗</i></button>').join('')+'</div><div id="rf-lead-panel" role="tabpanel" aria-labelledby="rf-lead-tab-'+activeLead+'" class="rf-lead-panel" tabindex="0"><div class="rf-opportunity"><div class="rf-opportunity-title"><span class="rf-eyebrow">THE CONNECTION WORTH MAKING</span><a href="'+esc(safeUrl(l.website))+'" target="_blank" rel="noopener noreferrer">Visit company ↗</a></div><h3>'+esc(l.name)+'</h3><div class="rf-value-row"><span class="rf-value-icon">◎</span><div><h4>Why this company. Why now.</h4><p>'+esc(l.whyNow)+'</p></div></div><div class="rf-pitch-pair"><section><span>01 / YOUR OPENING</span><h4>What you could offer</h4><p>'+esc(l.whatToSell)+'</p></section><section><span>02 / THEIR UPSIDE</span><h4>What’s in it for them</h4><p>'+esc(l.benefit)+'</p></section></div><details class="rf-evidence"><summary><span>✦</span> The detail behind your first line <b>+</b></summary><blockquote>'+esc(l.evidenceQuote)+'</blockquote><a href="'+esc(safeUrl(l.sourceUrl))+'" target="_blank" rel="noopener noreferrer">'+esc(l.sourceTitle||'Read the source')+' ↗</a><small>Source checked '+esc(date(l.verifiedAt))+(l.sourceDate?' · Published '+esc(l.sourceDate):'')+'</small></details></div><aside class="rf-email-card"><div class="rf-email-ribbon">A NOTE WORTH OPENING <span>✧</span></div><div class="rf-envelope-flap" aria-hidden="true"></div><div class="rf-email-paper"><div class="rf-email-meta"><span>YOUR FIRST HELLO</span><span>Draft · Review before sending</span></div><div class="rf-to-row"><span>To</span><strong>'+esc(contact?.person?.name||contact?.person?.fullName||l.roleToContact)+'</strong></div><div class="rf-contact-slot">'+contactMarkup(contact,l)+'</div><h4>'+esc(l.subject)+'</h4><div class="rf-email-body">'+String(l.email||'').split(/\n+/).filter(Boolean).map(s=>'<p>'+esc(s)+'</p>').join('')+'</div><div class="rf-email-footer"><span>Personal. Specific. Human.</span><button class="research-button" data-copy="'+activeLead+'">Copy email <span>↗</span></button></div></div><span class="rf-email-handnote">you take it from here <b>⤴</b></span></aside></div></section>';
- }
- function contactMarkup(c,l){if(c?.email){const verified=c.status==='found';return '<div class="rf-contact-result"><a href="mailto:'+esc(c.email)+'">'+esc(c.email)+'</a><span class="'+(verified?'verified':'risky')+'">'+(verified?'✓ Verified by Icypeas':'Review before using · '+esc(c.certainty||'uncertain'))+'</span></div>'}if(c?.status==='working')return '<span class="rf-contact-working"><i></i> '+(contactRunning?'Finding the right person & checking their email…':'Your email search is saved.')+'</span>'+(!contactRunning?'<button class="rf-find-contact" data-contact="'+activeLead+'">Continue email search <span>↗</span></button>':'');if(c&&['not_found','error','unknown','unavailable','risky','skipped'].includes(c.status))return '<span class="rf-contact-empty">'+esc(c.message||'No verified email found for this company.')+'</span><a class="rf-company-contact" href="'+esc(safeUrl(l.contactUrl||l.website))+'" target="_blank" rel="noopener noreferrer">Company contact page ↗</a>';return '<span class="rf-contact-empty">Email address not researched yet.</span>'+(contactAvailable?'<button class="rf-find-contact" data-contact="'+activeLead+'">Find a verified email <span>↗</span></button>':'<a class="rf-company-contact" href="'+esc(safeUrl(l.contactUrl||l.website))+'" target="_blank" rel="noopener noreferrer">Find them on their company website ↗</a>');}
- let healthChecked=false;
- async function checkContacts(){if(healthChecked)return;healthChecked=true;try{const h=await request('/api/health');if(h.contacts){contactAvailable=true;if(job?.status==='complete'&&activeView==='discovery')render()}}catch{}}
- function bind(){
-  modal.querySelector('.research-close').onclick=()=>modal.close();
-  modal.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{activeView=b.dataset.view;render()});
-  modal.querySelectorAll('[data-doc]').forEach(b=>b.onclick=()=>{activeDoc=b.dataset.doc;activeView='playbook';render();modal.querySelector('.rf-view-nav')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'})});
-  modal.querySelectorAll('[data-lead]').forEach(b=>{b.onclick=()=>{activeLead=Number(b.dataset.lead);render()};b.onkeydown=e=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const n=job.data.leads.length;activeLead=e.key==='Home'?0:e.key==='End'?n-1:(activeLead+(e.key==='ArrowRight'?1:-1)+n)%n;render();modal.querySelector('[data-lead="'+activeLead+'"]')?.focus()}}});
-  modal.querySelectorAll('.rf-company-logo img').forEach(img=>{img.addEventListener('error',()=>img.remove());img.addEventListener('load',()=>img.parentElement.classList.add('has-logo'))});
-  modal.querySelector('[data-retry]')?.addEventListener('click',async()=>{try{job=await request('/api/search/'+job.id+'/retry',{});alertMessage='';render();loop()}catch(e){notice(e.message)}});
-  modal.querySelector('[data-restart]')?.addEventListener('click',()=>{modal.close();opener?.focus()});
-  modal.querySelectorAll('[data-copy]').forEach(b=>b.onclick=async()=>{const l=job.data.leads[Number(b.dataset.copy)];try{await navigator.clipboard.writeText('Subject: '+l.subject+'\n\n'+l.email);b.textContent='Copied ✓';setTimeout(()=>{if(b.isConnected)b.innerHTML='Copy email <span>↗</span>'},2500)}catch{b.textContent='Select the text to copy'}});
-  modal.querySelector('[data-contact]')?.addEventListener('click',e=>enrich(Number(e.currentTarget.dataset.contact)));
-  if(activeView==='playbook')window.ClientFlockDocuments?.bind(modal.querySelector('.rf-view-content'),job?.data||{},key=>{activeDoc=key;render()});
- }
- async function enrich(index){if(contactRunning||!job?.id)return;contactRunning=true;const id=job.id,run=generation;contactState[index]={status:'working'};render();try{let n=0;while(modal.open&&run===generation&&n++<35){const r=await request('/api/search/'+id+'/contacts',{leadIndex:index});if(run!==generation)return;contactState[index]=r.contact;render();if(r.contact.status!=='working')break;await new Promise(resolve=>setTimeout(resolve,Math.max(7000,Math.min(r.retryAfterMs||0,60000))))}}catch(e){if(run===generation)contactState[index]={status:'error',message:e.message}}finally{if(run===generation){contactRunning=false;if(modal.open)render()}}}
- function notice(message){alertMessage=message;const old=modal.querySelector('.research-alert');if(old)old.textContent=message;else{const p=document.createElement('p');p.className='research-alert';p.setAttribute('role','alert');p.textContent=message;modal.querySelector('.rf-main')?.prepend(p)}}
- async function loop(){if(running||!job)return;running=true;const run=generation,id=job.id;try{while(modal.open&&job.status==='working'&&run===generation){const oldStage=job.stage;const next=await request('/api/search/'+id+'/advance',{});if(run!==generation)return;const cached=job.cached;job=next;job.cached=cached;if(job.stage!==oldStage||job.status!=='working')render();if(job.status==='working')await new Promise(r=>setTimeout(r,3500));}}catch(e){notice(e.message+' Close and resume to try again.')}finally{if(run===generation)running=false}}
- function reset(){generation++;running=false;contactRunning=false;contactState={};activeLead=0;activeDoc='mission';activeView='discovery';setupError='';alertMessage='';}
- function open(){if(!modal.open)modal.showModal();document.body.style.overflow='hidden';modal.scrollTop=0;modal.querySelector('.research-close')?.focus({preventScroll:true})}
- window.ClientFlockResearch={async start(input){reset();const run=generation;opener=document.activeElement;job=null;inputLabel=input.website||'Your business idea';render();open();try{const next=await request('/api/search',input);if(run!==generation)return;job=next;try{localStorage.setItem('clientflock-search-id',job.id)}catch{}render();loop();resumeButton()}catch(e){if(run!==generation)return;setupError=e.message;render()}},async resume(id){reset();const run=generation;opener=document.activeElement;try{const next=await request('/api/search/'+id);if(run!==generation)return;job=next;render();open();loop()}catch(e){if(run!==generation)return;job=null;setupError=e.message;render();open()}}};
- modal.addEventListener('close',()=>{if(modal.open)return;generation++;running=false;document.body.style.overflow='';opener?.focus()});
- function resumeButton(){let id;try{id=localStorage.getItem('clientflock-search-id')}catch{}if(!id)return;let b=document.querySelector('.resume-research');if(!b){b=document.createElement('button');b.className='resume-research';b.textContent='↗ Return to your discoveries';document.querySelector('.reassurance')?.after(b)}b.onclick=()=>window.ClientFlockResearch.resume(id)}resumeButton();
+  'use strict';
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+  const safeUrl = value => {
+    try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : '#'; }
+    catch { return '#'; }
+  };
+  const date = value => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); };
+  const domain = value => { try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return ''; } };
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const modal = document.createElement('dialog');
+  modal.className = 'research-room';
+  modal.setAttribute('aria-label', 'Your customer discovery');
+  document.body.append(modal);
+
+  let job = null, running = false, opener, generation = 0, inputLabel = '', activeDoc = 'mission', activeLead = 0, activeView = 'discovery';
+  let setupError = '', alertMessage = '', contactAvailable = false, contactRunning = false, contactState = {}, healthChecked = false;
+  let lastInput = null, lastResumeId = '', requalifying = false, contactTimer = null;
+  const phaseCopy = [
+    'Understanding your business.',
+    'Defining what you offer.',
+    'Understanding your market.',
+    'Identifying your ideal customers.',
+    'Finding relevant companies.',
+    'Checking websites and requirements.',
+    'Writing your personal emails.',
+    'Reviewing your shortlist.'
+  ];
+  // Frames illustrate the current server phase. They never advance the progress value.
+  // The celebration frame (11) is reserved for completed research.
+  const phaseFrames = [[0, 1], [2], [3, 4], [5], [6], [7], [8, 9], [7, 9]];
+  const frameUrl = index => '/assets/research-frames/frame-' + String(index + 1).padStart(2, '0') + '.webp';
+  const frameCache = new Map();
+  let frameTimer = null, framePhase = -1, framePosition = 0, frameToken = 0;
+
+  async function request(path, body) {
+    const response = await fetch(path, { ...(body !== undefined ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
+    let data;
+    try { data = await response.json(); } catch { throw Error('We couldn’t reach the research service. Please try again.'); }
+    if (!response.ok && !data.contact) throw Error(data.error || 'Research is temporarily unavailable.');
+    return data;
+  }
+
+  function readyFrame(index) {
+    if (!frameCache.has(index)) {
+      frameCache.set(index, new Promise(resolve => {
+        const image = new Image(); image.decoding = 'async';
+        image.onload = async () => { try { await image.decode(); } catch {} resolve(image.src); };
+        image.onerror = () => resolve('/assets/swan.svg');
+        image.src = frameUrl(index);
+      }));
+    }
+    return frameCache.get(index);
+  }
+
+  async function displayFrame(index) {
+    const token = ++frameToken, run = generation;
+    const source = await readyFrame(index);
+    if (token !== frameToken || run !== generation || !modal.open || activeView !== 'discovery' || job?.status === 'complete') return;
+    const art = modal.querySelector('.rf-loading-art');
+    if (!art) return;
+    const frames = [...art.querySelectorAll('.rf-loading-frame')];
+    const current = frames.find(image => image.classList.contains('is-visible')) || frames[0];
+    if (current?.getAttribute('src') === source || current?.src === source) return;
+    const next = frames.find(image => image !== current);
+    if (!next) return;
+    next.src = source;
+    next.dataset.frame = String(index + 1);
+    if (reducedMotion()) { current.classList.remove('is-visible'); next.classList.add('is-visible'); }
+    else requestAnimationFrame(() => { if (token === frameToken && art.isConnected) { next.classList.add('is-visible'); current.classList.remove('is-visible'); } });
+  }
+
+  function stopFrames() { clearTimeout(frameTimer); frameTimer = null; framePhase = -1; frameToken++; }
+  function updateFrames(stage) {
+    if (!modal.open || document.hidden || activeView !== 'discovery' || !modal.querySelector('.rf-loading')) { clearTimeout(frameTimer); frameTimer = null; return; }
+    const sequence = phaseFrames[stage];
+    if (framePhase !== stage) {
+      clearTimeout(frameTimer); frameTimer = null; framePhase = stage; framePosition = 0;
+      displayFrame(sequence[0]);
+      sequence.slice(1).forEach(readyFrame);
+      if (stage < 7) readyFrame(phaseFrames[stage + 1][0]);
+      if (stage === 7) readyFrame(10);
+    }
+    if (!frameTimer && sequence.length > 1 && !reducedMotion()) {
+      frameTimer = setTimeout(() => {
+        frameTimer = null;
+        if (framePhase !== stage || !modal.open || document.hidden || activeView !== 'discovery') return;
+        framePosition = (framePosition + 1) % sequence.length;
+        displayFrame(sequence[framePosition]);
+        updateFrames(stage);
+      }, 5800);
+    }
+  }
+
+  const currentStage = () => Math.min(7, Math.max(0, Number(job?.stage) || 0));
+  const readyDocs = () => ['mission', 'market', 'idealClients'].filter(key => job?.data?.[key]?.document).length;
+  const projectName = () => job?.data?.understanding?.profile?.name || inputLabel || 'Your business';
+  const qualification = () => job?.data?.qualification;
+  function needsRecheck() {
+    const value = qualification(), leads = job?.data?.leads || [];
+    if (!job) return false;
+    if (value?.status === 'requalification-required' || value?.version === 0) return true;
+    return job.status === 'complete' && (!value || Number(value.version) < 1 || leads.some(lead => !lead.websiteCheck));
+  }
+
+  function focusSelector() {
+    const element = document.activeElement;
+    if (!modal.contains(element)) return null;
+    for (const attribute of ['data-focus', 'data-cf-doc-select', 'data-cf-doc-download', 'data-contact-retry', 'data-contact']) {
+      if (element.hasAttribute?.(attribute)) return '[' + attribute + '="' + CSS.escape(element.getAttribute(attribute)) + '"]';
+    }
+    return element.id ? '#' + CSS.escape(element.id) : null;
+  }
+
+  function updateLoading() {
+    const stage = currentStage(), status = modal.querySelector('.rf-loading-stage');
+    if (status) status.textContent = job ? phaseCopy[stage] : 'Opening your research.';
+    const progress = modal.querySelector('.rf-loading-progress progress');
+    if (progress) { progress.value = stage; progress.setAttribute('aria-valuetext', stage + ' of 8 research steps completed'); }
+    const count = modal.querySelector('.rf-loading-count');
+    if (count) count.textContent = stage + '/8 steps complete';
+    const playbook = modal.querySelector('.rf-playbook-link');
+    if (playbook) playbook.innerHTML = 'View your business playbook <span>' + readyDocs() + '/3</span>';
+    updateFrames(stage);
+  }
+
+  function render() {
+    const done = job?.status === 'complete', failed = job?.status === 'failed' || !!setupError, review = needsRecheck();
+    if (!done && !failed && !review && activeView === 'discovery' && modal.dataset.state === 'working' && modal.querySelector('.rf-loading')) {
+      updateLoading(); return;
+    }
+    const focus = focusSelector(), scroll = modal.scrollTop;
+    stopFrames();
+    modal.dataset.state = review ? 'review' : done ? 'complete' : failed ? 'paused' : 'working';
+    const loading = !done && !failed && !review && activeView === 'discovery';
+    let content;
+    if (activeView === 'playbook') {
+      content = '<div class="rf-playbook-heading"><button class="rf-playbook-back" data-view="discovery" data-focus="view-discovery">← ' + (done ? 'Back to your customers' : 'Back to your search') + '</button><span>' + esc(projectName()) + '</span></div><div class="rf-view-content">' + documents() + '</div>';
+    } else if (loading) content = loadingView();
+    else if (failed && !review) content = paused();
+    else content = '<div class="rf-project"><span>' + esc(projectName()) + '</span>' + (job?.cached ? '<span class="rf-saved">Saved ' + esc(date(job.updatedAt)) + '</span>' : '') + '</div>' + completeHero() + '<nav class="rf-view-nav" aria-label="Research views"><button data-view="discovery" data-focus="view-discovery" class="selected">Your customers <span>' + (job?.data?.leads?.length || 0) + '</span></button><button data-view="playbook" data-focus="view-playbook">Your business playbook <span>' + readyDocs() + '/3</span></button></nav><div class="rf-view-content">' + results() + '</div>';
+    modal.innerHTML = '<header class="research-header"><a class="research-brand" href="/"><img src="/assets/swan.svg" alt="">ClientFlock</a><button class="research-close" data-focus="close" aria-label="Close research">×</button></header><main class="rf-main' + (loading ? ' rf-main-loading' : '') + '">' + (alertMessage ? '<div class="research-alert" role="alert">' + esc(alertMessage) + '</div>' : '') + content + '</main>';
+    bind(); modal.scrollTop = scroll;
+    if (focus) modal.querySelector(focus)?.focus({ preventScroll: true });
+    if (loading) updateLoading();
+    if (done && !needsRecheck()) checkContacts();
+  }
+
+  function loadingView() {
+    const stage = currentStage();
+    return '<section class="rf-loading" aria-label="Customer research in progress"><div class="rf-loading-art" aria-hidden="true"><img class="rf-loading-frame is-visible" src="/assets/swan.svg" alt="" decoding="async"><img class="rf-loading-frame rf-loading-next" alt="" decoding="async"></div><h1>Finding your next customers.</h1><p class="rf-loading-stage" role="status" aria-live="polite">' + (job ? phaseCopy[stage] : 'Opening your research.') + '</p><div class="rf-loading-progress"><progress max="8" value="' + stage + '" aria-label="Research steps completed" aria-valuetext="' + stage + ' of 8 research steps completed"></progress><span class="rf-loading-count">' + stage + '/8 steps complete</span></div><button class="rf-playbook-link" data-view="playbook" data-focus="view-playbook">View your business playbook <span>' + readyDocs() + '/3</span></button></section>';
+  }
+
+  function completeHero() {
+    if (needsRecheck()) return '<section class="rf-complete-hero rf-complete-review"><div><h1>Your saved research.</h1><p>One more check before you reach out.</p></div></section>';
+    const count = job?.data?.leads?.length || 0;
+    return '<section class="rf-complete-hero"><div><h1>' + count + ' potential customer' + (count === 1 ? '' : 's') + '.</h1><p>A reason to reach out. A personal first email.</p></div><img class="rf-complete-mark" src="' + frameUrl(10) + '" alt="Your swan has finished the search" decoding="async"></section>';
+  }
+
+  function paused() {
+    return '<section class="rf-paused"><img src="/assets/swan.svg" alt=""><h1>Your search is paused.</h1><p>' + esc(setupError || job?.error || 'We couldn’t finish this step just yet.') + '</p>' + (job?.id ? '<button class="research-button" data-retry data-focus="retry-research">Continue this research ↗</button>' : '<button class="research-button" data-restart data-focus="restart-research">Try again ↗</button>') + '<small>Completed research is saved.</small><button class="rf-playbook-link" data-view="playbook" data-focus="view-playbook">View your business playbook <span>' + readyDocs() + '/3</span></button></section>';
+  }
+
+  function documents() { return window.ClientFlockDocuments?.render(job?.data || {}, activeDoc) || '<p>Your business playbook is taking shape.</p>'; }
+
+  function recheckNotice() {
+    return '<section class="rf-requalification" role="status"><span aria-hidden="true">↻</span><h2>These results need a fresh check.</h2><p>' + esc(qualification()?.message || 'This saved search predates website and platform verification. Recheck it before using the shortlist.') + '</p><button class="research-button" data-requalify data-focus="requalify"' + (requalifying ? ' disabled' : '') + '>' + (requalifying ? 'Starting the check…' : 'Recheck this search ↗') + '</button><small>Your business playbook remains available.</small></section>';
+  }
+
+  function platformMarkup(lead) {
+    const platform = lead.platform || {}, checked = platform.status === 'verified' && typeof platform.name === 'string' && platform.name.trim();
+    const required = qualification()?.requiredPlatforms || [];
+    const unavailable = platform.status === 'unavailable';
+    const label = checked ? platform.name + ' verified' : unavailable ? 'Platform check unavailable' : required.includes('Shopify') ? 'Shopify not confirmed' : 'Platform not confirmed';
+    const status = checked ? 'verified' : unavailable ? 'unavailable' : 'unknown';
+    const evidence = Array.isArray(platform.evidence) ? platform.evidence.filter(value => typeof value === 'string' && value.trim()) : [];
+    const proofUrl = safeUrl(platform.url || lead.websiteCheck?.url || lead.website);
+    return '<details class="rf-platform-evidence"><summary data-focus="platform-proof"><span class="rf-platform-status" data-status="' + status + '">' + (checked ? '✓ ' : '') + esc(label) + '</span><span>View check <b>+</b></span></summary><div>' + (evidence.length ? '<ul>' + evidence.map(value => '<li>' + esc(value) + '</li>').join('') + '</ul>' : '<p>' + (unavailable ? 'The website could not be checked reliably. No platform has been confirmed.' : 'No conclusive platform evidence was found. This does not mean the company does not use Shopify.') + '</p>') + (proofUrl !== '#' ? '<a href="' + esc(proofUrl) + '" target="_blank" rel="noopener noreferrer">Open the checked page ↗</a>' : '') + (platform.checkedAt ? '<small>Checked ' + esc(date(platform.checkedAt)) + '</small>' : '') + '</div></details>';
+  }
+
+  function websiteMarkup(lead) {
+    const url = safeUrl(lead.website), check = lead.websiteCheck;
+    const label = check?.status === 'checked' ? 'Website checked' + (check.checkedAt ? ' ' + date(check.checkedAt) : '') : check?.status === 'unavailable' ? 'Website check unavailable' : 'Website not checked';
+    return '<div class="rf-company-website-row">' + (url !== '#' ? '<a class="rf-company-website" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(domain(url)) + '<span aria-hidden="true"> ↗</span></a>' : '<span class="rf-company-website">Website unavailable</span>') + '<span class="rf-website-state">' + esc(label) + '</span></div>' + platformMarkup(lead);
+  }
+
+  const logo = lead => '<span class="rf-company-logo"><span>' + esc((lead.name || '?').slice(0, 1)) + '</span>' + (safeUrl(lead.website) !== '#' ? '<img src="' + esc(new URL('/favicon.ico', lead.website).href) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span>';
+  function results() {
+    if (needsRecheck()) return recheckNotice();
+    const leads = job?.data?.leads || [];
+    if (!leads.length) return '<p>Your shortlist is being prepared.</p>';
+    activeLead = Math.min(activeLead, leads.length - 1);
+    const lead = leads[activeLead], contact = contactState[activeLead] || job?.data?.contacts?.[activeLead];
+    return '<section class="rf-results"><div class="rf-section-heading"><h2>Your shortlist.</h2><span class="rf-source-note">Research-backed prospects. Buying interest to explore.</span></div><div class="rf-prospect-tabs" role="tablist" aria-label="Potential customers">' + leads.map((item, index) => '<button role="tab" id="rf-lead-tab-' + index + '" aria-controls="rf-lead-panel" aria-selected="' + (index === activeLead) + '" tabindex="' + (index === activeLead ? '0' : '-1') + '" class="rf-prospect-tab ' + (index === activeLead ? 'selected' : '') + '" data-lead="' + index + '" data-focus="lead-' + index + '">' + logo(item) + '<span><small>COMPANY ' + String(index + 1).padStart(2, '0') + '</small><strong>' + esc(item.name) + '</strong><span>' + esc(domain(item.website)) + '</span></span><i>↗</i></button>').join('') + '</div><div id="rf-lead-panel" role="tabpanel" aria-labelledby="rf-lead-tab-' + activeLead + '" class="rf-lead-panel" tabindex="0"><div class="rf-opportunity"><h3>' + esc(lead.name) + '</h3>' + websiteMarkup(lead) + '<div class="rf-value-row"><span class="rf-value-icon">◎</span><div><h4>Why reach out now</h4><p>' + esc(lead.whyNow) + '</p></div></div><div class="rf-pitch-pair"><section><span>01 / YOUR OFFER</span><h4>What you could offer</h4><p>' + esc(lead.whatToSell) + '</p></section><section><span>02 / THEIR BENEFIT</span><h4>What they gain</h4><p>' + esc(lead.benefit) + '</p></section></div><details class="rf-evidence"><summary data-focus="source-proof"><span>↗</span> The detail behind your first line <b>+</b></summary><blockquote>' + esc(lead.evidenceQuote) + '</blockquote><a href="' + esc(safeUrl(lead.sourceUrl)) + '" target="_blank" rel="noopener noreferrer">' + esc(lead.sourceTitle || 'Read the source') + ' ↗</a><small>Source checked ' + esc(date(lead.verifiedAt)) + (lead.sourceDate ? ' · Published ' + esc(lead.sourceDate) : '') + '</small></details></div><aside class="rf-email-card"><div class="rf-email-ribbon">YOUR FIRST EMAIL</div><div class="rf-email-paper"><div class="rf-email-meta"><span>Draft</span><span>Review before sending</span></div><div class="rf-to-row"><span>To</span><strong>' + esc(contact?.person?.name || contact?.person?.fullName || lead.roleToContact) + '</strong></div><div class="rf-contact-slot">' + contactMarkup(contact, lead) + '</div><h4>' + esc(lead.subject) + '</h4><div class="rf-email-body">' + String(lead.email || '').split(/\n+/).filter(Boolean).map(text => '<p>' + esc(text) + '</p>').join('') + '</div><div class="rf-email-footer"><button class="research-button" data-copy="' + activeLead + '" data-focus="copy-email">Copy email <span>↗</span></button></div></div></aside></div></section>';
+  }
+
+  function contactMarkup(contact, lead) {
+    if (contact?.email) {
+      const verified = contact.status === 'found';
+      return '<div class="rf-contact-result"><a href="mailto:' + encodeURIComponent(String(contact.email)) + '">' + esc(contact.email) + '</a><span class="' + (verified ? 'verified' : 'risky') + '">' + (verified ? '✓ Verified by Icypeas' : 'Review before using · ' + esc(contact.certainty || 'uncertain')) + '</span></div>';
+    }
+    if (contact?.status === 'working') return '<span class="rf-contact-working" role="status"><i></i> ' + (contactRunning ? 'Finding and checking their email…' : 'Your email search is saved.') + '</span>' + (!contactRunning ? '<button class="rf-find-contact" data-contact="' + activeLead + '">Continue email search ↗</button>' : '');
+    if (contact && ['not_found', 'error', 'unknown', 'unavailable', 'risky', 'skipped'].includes(contact.status)) {
+      const retryable = contact.errorCode === 'auth_configuration' && contact.retryable === true;
+      const wait = Math.max(0, Math.ceil(((contact.retryAt || 0) - Date.now()) / 1000));
+      return '<span class="rf-contact-empty">' + esc(contact.message || 'No verified email found for this company.') + '</span>' + (retryable ? '<button class="rf-find-contact" data-contact-retry="' + activeLead + '"' + (wait ? ' disabled' : '') + '>Retry email search ↗</button>' + (wait ? '<small class="rf-contact-cooldown" role="status">Try again in ' + wait + ' seconds.</small>' : '') : '') + '<a class="rf-company-contact" href="' + esc(safeUrl(lead.contactUrl || lead.website)) + '" target="_blank" rel="noopener noreferrer">Company contact page ↗</a>';
+    }
+    return '<span class="rf-contact-empty">Email address not researched yet.</span>' + (contactAvailable ? '<button class="rf-find-contact" data-contact="' + activeLead + '">Find a verified email ↗</button>' : '<a class="rf-company-contact" href="' + esc(safeUrl(lead.contactUrl || lead.website)) + '" target="_blank" rel="noopener noreferrer">Company contact page ↗</a>');
+  }
+
+  function bindContactButtons() {
+    modal.querySelector('[data-contact]')?.addEventListener('click', event => enrich(Number(event.currentTarget.dataset.contact)));
+    modal.querySelector('[data-contact-retry]')?.addEventListener('click', event => enrich(Number(event.currentTarget.dataset.contactRetry), true));
+  }
+  function refreshContact() {
+    clearTimeout(contactTimer); contactTimer = null;
+    const slot = modal.querySelector('.rf-contact-slot'), lead = job?.data?.leads?.[activeLead];
+    if (!slot || !lead || !modal.open) return;
+    const hadFocus = slot.contains(document.activeElement), contact = contactState[activeLead] || job?.data?.contacts?.[activeLead];
+    slot.innerHTML = contactMarkup(contact, lead); bindContactButtons();
+    const name = modal.querySelector('.rf-to-row strong');
+    if (name) name.textContent = contact?.person?.name || contact?.person?.fullName || lead.roleToContact || 'Company contact';
+    if (hadFocus) slot.querySelector('button:not(:disabled), a')?.focus({ preventScroll: true });
+    const remaining = (contact?.retryAt || 0) - Date.now();
+    if (remaining > 0) contactTimer = setTimeout(refreshContact, remaining + 50);
+  }
+
+  async function checkContacts() {
+    if (healthChecked) return;
+    healthChecked = true; const run = generation;
+    try { const health = await request('/api/health'); if (run !== generation) return; contactAvailable = health.contacts === true; refreshContact(); } catch {}
+  }
+
+  function bind() {
+    modal.querySelector('.research-close').onclick = () => modal.close();
+    modal.querySelectorAll('[data-view]').forEach(button => button.onclick = () => { activeView = button.dataset.view; render(); });
+    modal.querySelectorAll('[data-lead]').forEach(button => {
+      button.onclick = () => { activeLead = Number(button.dataset.lead); render(); };
+      button.onkeydown = event => {
+        if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault(); const count = job.data.leads.length;
+        activeLead = event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : (activeLead + (event.key === 'ArrowRight' ? 1 : -1) + count) % count;
+        render(); modal.querySelector('[data-lead="' + activeLead + '"]')?.focus({ preventScroll: true });
+      };
+    });
+    modal.querySelectorAll('.rf-company-logo img').forEach(image => { image.addEventListener('error', () => image.remove()); image.addEventListener('load', () => image.parentElement.classList.add('has-logo')); });
+    modal.querySelector('[data-retry]')?.addEventListener('click', async event => { const run = generation, id = job.id, button = event.currentTarget; button.disabled = true; try { const next = await request('/api/search/' + id + '/retry', {}); if (run !== generation) return; job = next; alertMessage = ''; render(); loop(); } catch (error) { if (run === generation) notice(error.message); } finally { if (run === generation && button.isConnected) button.disabled = false; } });
+    modal.querySelector('[data-restart]')?.addEventListener('click', () => { if (lastInput) window.ClientFlockResearch.start(lastInput); else if (lastResumeId) window.ClientFlockResearch.resume(lastResumeId); else modal.close(); });
+    modal.querySelector('[data-requalify]')?.addEventListener('click', requalify);
+    modal.querySelectorAll('[data-copy]').forEach(button => button.onclick = async () => {
+      const lead = job.data.leads[Number(button.dataset.copy)];
+      try { await navigator.clipboard.writeText('Subject: ' + lead.subject + '\n\n' + lead.email); button.textContent = 'Copied ✓'; setTimeout(() => { if (button.isConnected) button.innerHTML = 'Copy email <span>↗</span>'; }, 2500); }
+      catch { button.textContent = 'Select the text to copy'; }
+    });
+    bindContactButtons();
+    if (activeView === 'playbook') window.ClientFlockDocuments?.bind(modal.querySelector('.rf-view-content'), job?.data || {}, key => { activeDoc = key; render(); });
+  }
+
+  async function requalify() {
+    if (requalifying || !job?.id) return;
+    requalifying = true; const id = job.id, run = generation;
+    const button = modal.querySelector('[data-requalify]'); if (button) { button.disabled = true; button.textContent = 'Starting the check…'; }
+    try {
+      const next = await request('/api/search/' + id + '/requalify', {});
+      if (run !== generation) return;
+      reset(); job = next; render(); loop();
+    } catch (error) { if (run === generation) { notice(error.message); if (button?.isConnected) { button.disabled = false; button.textContent = 'Recheck this search ↗'; } } }
+    finally { requalifying = false; }
+  }
+
+  async function enrich(index, retry = false) {
+    if (contactRunning || !job?.id) return;
+    const oldContact = contactState[index] || job?.data?.contacts?.[index];
+    if (retry && (oldContact?.retryAt || 0) > Date.now()) { refreshContact(); return; }
+    contactRunning = true; const id = job.id, run = generation;
+    contactState[index] = { status: 'working' }; refreshContact();
+    try {
+      let count = 0;
+      while (modal.open && run === generation && count++ < 35) {
+        const response = await request('/api/search/' + id + '/contacts', { leadIndex: index, ...(retry && count === 1 ? { retry: true } : {}) });
+        if (run !== generation) return;
+        contactState[index] = { ...response.contact, ...(response.contact?.errorCode === 'auth_configuration' && response.retryAfterMs > 0 ? { retryAt: Date.now() + response.retryAfterMs } : {}) };
+        refreshContact();
+        if (response.contact?.status !== 'working') break;
+        await new Promise(resolve => setTimeout(resolve, Math.max(7000, Math.min(Number(response.retryAfterMs) || 0, 60000))));
+      }
+    } catch (error) { if (run === generation) contactState[index] = { status: 'error', message: error.message }; }
+    finally { if (run === generation) { contactRunning = false; refreshContact(); } }
+  }
+
+  function notice(message) {
+    alertMessage = message;
+    const old = modal.querySelector('.research-alert');
+    if (old) old.textContent = message;
+    else { const paragraph = document.createElement('p'); paragraph.className = 'research-alert'; paragraph.setAttribute('role', 'alert'); paragraph.textContent = message; modal.querySelector('.rf-main')?.prepend(paragraph); }
+  }
+
+  async function loop() {
+    if (running || !job || needsRecheck()) return;
+    running = true; const run = generation, id = job.id;
+    try {
+      while (modal.open && job.status === 'working' && run === generation && !needsRecheck()) {
+        const previous = [job.stage, job.status, readyDocs(), qualification()?.status].join('|');
+        const next = await request('/api/search/' + id + '/advance', {});
+        if (run !== generation) return;
+        const cached = job.cached; job = next; job.cached = cached;
+        if ([job.stage, job.status, readyDocs(), qualification()?.status].join('|') !== previous) render();
+        if (needsRecheck()) break;
+        if (job.status === 'working') await new Promise(resolve => setTimeout(resolve, 3500));
+      }
+    } catch (error) { if (run === generation) notice(error.message + ' Close and resume to try again.'); }
+    finally { if (run === generation) running = false; }
+  }
+
+  function reset() {
+    generation++; running = false; contactRunning = false; contactState = {}; activeLead = 0; activeDoc = 'mission'; activeView = 'discovery';
+    setupError = ''; alertMessage = ''; healthChecked = false; contactAvailable = false; requalifying = false;
+    clearTimeout(contactTimer); contactTimer = null; stopFrames();
+  }
+  function open() { if (!modal.open) modal.showModal(); document.body.style.overflow = 'hidden'; modal.scrollTop = 0; modal.querySelector('.research-close')?.focus({ preventScroll: true }); if (modal.querySelector('.rf-loading')) updateLoading(); }
+
+  window.ClientFlockResearch = {
+    async start(input) {
+      reset(); const run = generation; lastInput = input; lastResumeId = ''; opener = document.activeElement; job = null; inputLabel = input.website || 'Your business idea'; render(); open();
+      try {
+        const next = await request('/api/search', input); if (run !== generation) return; job = next;
+        try { localStorage.setItem('clientflock-search-id', job.id); } catch {}
+        render(); loop(); resumeButton();
+      } catch (error) { if (run === generation) { setupError = error.message; render(); } }
+    },
+    async resume(id) {
+      reset(); const run = generation; lastInput = null; lastResumeId = id; opener = document.activeElement; job = null; inputLabel = 'Saved research'; render(); open();
+      try { const next = await request('/api/search/' + id); if (run !== generation) return; job = next; render(); loop(); }
+      catch (error) { if (run === generation) { setupError = error.message; render(); } }
+    }
+  };
+
+  modal.addEventListener('close', () => { if (modal.open) return; generation++; running = false; contactRunning = false; stopFrames(); clearTimeout(contactTimer); contactTimer = null; document.body.style.overflow = ''; opener?.focus(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(frameTimer); frameTimer = null; } else if (modal.open && modal.querySelector('.rf-loading')) updateLoading(); });
+  function resumeButton() {
+    let id; try { id = localStorage.getItem('clientflock-search-id'); } catch {} if (!id) return;
+    let button = document.querySelector('.resume-research');
+    if (!button) { button = document.createElement('button'); button.className = 'resume-research'; button.textContent = '↗ Return to your research'; document.querySelector('.reassurance')?.after(button); }
+    button.onclick = () => window.ClientFlockResearch.resume(id);
+  }
+  resumeButton();
 })();

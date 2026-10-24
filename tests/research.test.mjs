@@ -15,12 +15,12 @@ test('concurrent advances launch one provider job and web search avoids JSON mod
  const result=await(await api(req('/api/search/'+job.id+'/advance',{}),env)).json();assert.equal(result.stage,1);assert.equal(result.data.understanding.citations[0].url,'https://calendly.com');
  }finally{globalThis.fetch=original}
 });
-test('retry preserves rejected-company evidence and restarts discovery',async()=>{const env={DB:db(),OPENAI_API_KEY:'test'};const a=await(await api(req('/api/search',{website:'calendly.com'}),env)).json();const data={discovery:{leads:[{name:'Blocked Firm',website:'https://blocked.example'}]}};await env.DB.prepare("UPDATE searches SET stage=5,status='failed',error=?,data=? WHERE id=?").bind('Source could not be checked for Blocked Firm.',JSON.stringify(data),a.id).run();const resumed=await(await api(req('/api/search/'+a.id+'/retry',{}),env)).json();assert.equal(resumed.stage,4);assert.equal(resumed.status,'working');assert.deepEqual(resumed.data.rejectedDomains,['https://blocked.example']);assert.match(resumed.data.repairNote,/Blocked Firm/);});
+test('retry preserves rejected-company evidence and restarts discovery',async()=>{const env={DB:db(),OPENAI_API_KEY:'test'};const a=await(await api(req('/api/search',{website:'calendly.com'}),env)).json();const data={qualification:{version:1,status:'pending',requiredPlatforms:[]},discovery:{leads:[{name:'Blocked Firm',website:'https://blocked.example'}]}};await env.DB.prepare("UPDATE searches SET stage=5,status='failed',error=?,data=? WHERE id=?").bind('Source could not be checked for Blocked Firm.',JSON.stringify(data),a.id).run();const resumed=await(await api(req('/api/search/'+a.id+'/retry',{}),env)).json();assert.equal(resumed.stage,4);assert.equal(resumed.status,'working');assert.deepEqual(resumed.data.rejectedDomains,['https://blocked.example']);assert.match(resumed.data.repairNote,/Blocked Firm/);});
 
 const providerResult=output=>Response.json({status:'completed',output:[{type:'web_search_call',action:{sources:[{url:'https://example.com',title:'A checked research source'}]}},{type:'message',content:[{type:'output_text',text:JSON.stringify(output)}]}]});
 async function waitingJob(env,input,stage=0,data={}){
  const job=await(await api(req('/api/search',input),env)).json();
- await env.DB.prepare("UPDATE searches SET stage=?,data=?,response_id='resp_fixture' WHERE id=?").bind(stage,JSON.stringify(data),job.id).run();return job;
+ await env.DB.prepare("UPDATE searches SET stage=?,data=?,response_id='resp_fixture' WHERE id=?").bind(stage,JSON.stringify({qualification:{version:1,status:'pending',requiredPlatforms:[]},...data}),job.id).run();return job;
 }
 const advanceJob=async(env,job)=>(await api(req('/api/search/'+job.id+'/advance',{}),env)).json();
 const enProfile={understanding:{profile:{name:'Example',offer:'Booking software for French hotels',audience:'Hotels in France',language:'English',languageCode:'en'}}};

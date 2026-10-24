@@ -1,0 +1,119 @@
+{
+  "series": "ClientFlock monochrome research swan",
+  "generator": "Built-in imagegen",
+  "reference": "frame-01.webp",
+  "background": "transparent",
+  "frames": [
+    {
+      "number": 1,
+      "file": "frame-01.webp",
+      "src": "/assets/research-frames/frame-01.webp",
+      "title": "Curiosity",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 114606,
+      "alpha": true
+    },
+    {
+      "number": 2,
+      "file": "frame-02.webp",
+      "src": "/assets/research-frames/frame-02.webp",
+      "title": "Reading your website",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 122950,
+      "alpha": true
+    },
+    {
+      "number": 3,
+      "file": "frame-03.webp",
+      "src": "/assets/research-frames/frame-03.webp",
+      "title": "Finding an idea",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 108278,
+      "alpha": true
+    },
+    {
+      "number": 4,
+      "file": "frame-04.webp",
+      "src": "/assets/research-frames/frame-04.webp",
+      "title": "Planning the direction",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 111242,
+      "alpha": true
+    },
+    {
+      "number": 5,
+      "file": "frame-05.webp",
+      "src": "/assets/research-frames/frame-05.webp",
+      "title": "Looking further",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 146826,
+      "alpha": true
+    },
+    {
+      "number": 6,
+      "file": "frame-06.webp",
+      "src": "/assets/research-frames/frame-06.webp",
+      "title": "Connecting the dots",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 121802,
+      "alpha": true
+    },
+    {
+      "number": 7,
+      "file": "frame-07.webp",
+      "src": "/assets/research-frames/frame-07.webp",
+      "title": "Sorting prospects",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 111954,
+      "alpha": true
+    },
+    {
+      "number": 8,
+      "file": "frame-08.webp",
+      "src": "/assets/research-frames/frame-08.webp",
+      "title": "Checking the facts",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 115506,
+      "alpha": true
+    },
+    {
+      "number": 9,
+      "file": "frame-09.webp",
+      "src": "/assets/research-frames/frame-09.webp",
+      "title": "Writing your first letter",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 115358,
+      "alpha": true
+    },
+    {
+      "number": 10,
+      "file": "frame-10.webp",
+      "src": "/assets/research-frames/frame-10.webp",
+      "title": "Making the introduction",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 113810,
+      "alpha": true
+    },
+    {
+      "number": 11,
+      "file": "frame-11.webp",
+      "src": "/assets/research-frames/frame-11.webp",
+      "title": "Discovery complete",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 129476,
+      "alpha": true
+    }
+  ],
+  "webEncoding": "WebP, original dimensions and alpha preserved"
+}
