@@ -2,8 +2,8 @@
   "generatedWith": "built-in imagegen",
   "format": "WebP",
   "quality": 86,
-  "sceneCount": 20,
-  "totalBytes": 3270462,
+  "sceneCount": 30,
+  "totalBytes": 4742986,
   "scenes": [
     {
       "number": 1,
@@ -244,6 +244,126 @@
       "bytes": 145458,
       "alpha": true,
       "reused": false
+    },
+    {
+      "number": 21,
+      "title": "The spaghetti situation",
+      "prompt": "Use case: stylized-concept. Asset type: premium SaaS loading mascot illustration. Input image is CHARACTER IDENTITY AND MATERIAL REFERENCE ONLY, do NOT copy its cactus or hugging pose. Same matte charcoal BLACK SWAN, graceful long curved neck, ivory-white beak, sculpted layered feathers, bright expressive eyes, soft tactile ceramic-paper texture, elegant grownup playful 3D render. Entire subject and props visible in square composition, generous 10% transparent margin all sides. Soft studio light on object only. Real transparent alpha background, no floor, no backdrop, no halo, no text, logo, UI or watermark. Swan remains black; props may use tasteful bright colors. Scene21: A deliciously absurd spaghetti emergency. Swan sitting low on both webbed feet with neck curling sideways, one wing holding an oversized silver fork high above its beak. A single long golden spaghetti ribbon dangles from the fork all the way toward a small ivory plate of spaghetti resting between the swan's feet. Swan looks up with wide-eyed delighted concentration, beak just about to catch the strand. One tiny cherry tomato and two basil leaves on the plate. Dynamic tall diagonal composition, no extra limbs. Entire fork, swan and plate visible.",
+      "src": "/assets/research-scenes/scene-21.webp",
+      "file": "scene-21.webp",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "reused": false,
+      "bytes": 173660
+    },
+    {
+      "number": 22,
+      "title": "Tiny skates, big plans",
+      "prompt": "Use case: stylized-concept. Asset type: premium SaaS loading mascot illustration. Input image is CHARACTER IDENTITY AND MATERIAL REFERENCE ONLY, do NOT copy its cactus or hugging pose. Same matte charcoal BLACK SWAN, graceful long curved neck, ivory-white beak, sculpted layered feathers, bright expressive eyes, soft tactile ceramic-paper texture, elegant grownup playful 3D render. Entire subject and props visible in square composition, generous 10% transparent margin all sides. Soft studio light on object only. Real transparent alpha background, no floor, no backdrop, no halo, no text, logo, UI or watermark. Swan remains black; props may use tasteful bright colors. Scene22: This swan is learning to roller skate and is taking it very seriously. Full-body swan leaning diagonally forward, wings thrown wide for balance, one webbed foot lifted behind and one on the ground. Two comically tiny candy pink quad roller skates with cream wheels fitted on its feet. Small lilac rounded helmet perched high on its head, beak grinning with determined expression. Long neck curved forwards in dynamic S, low horizontal body. Exactly two wings and two legs, no road or floor. Whole skates, helmet, wing tips and tail clearly inside square with padding.",
+      "src": "/assets/research-scenes/scene-22.webp",
+      "file": "scene-22.webp",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "reused": false,
+      "bytes": 147536
+    },
+    {
+      "number": 23,
+      "title": "A curious little experiment",
+      "prompt": "Use case: stylized-concept. Asset type: premium SaaS loading mascot illustration. Input image is CHARACTER IDENTITY AND MATERIAL REFERENCE ONLY, do NOT copy its cactus or hugging pose. Same matte charcoal BLACK SWAN, graceful long curved neck, ivory-white beak, sculpted layered feathers, bright expressive eyes, soft tactile ceramic-paper texture, elegant grownup playful 3D render. Entire subject and props visible in square composition, generous 10% transparent margin all sides. Soft studio light on object only. Real transparent alpha background, no floor, no backdrop, no halo, no text, logo, UI or watermark. Swan remains black; props may use tasteful bright colors. Scene23: Eccentric tiny scientist. The swan is crouching with webbed feet wide apart, holding one oversized round-bottom glass flask gently with both feather wings. Flask filled with bright coral-pink liquid and three round iridescent bubbles popping up above it. Its elegant long neck curls down to inspect the flask through oversized clear circular safety goggles, one amused raised eyebrow. No lab coat so beautiful black feather body stays visible. Whole body, goggles, glass flask and floating bubbles visible. Clever funny silhouette, not upright static pose. No laboratory furniture, no smoke, no glow, no chemistry lettering.",
+      "src": "/assets/research-scenes/scene-23.webp",
+      "file": "scene-23.webp",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "reused": false,
+      "bytes": 163922
+    },
+    {
+      "number": 24,
+      "title": "A different point of view",
+      "prompt": "Use case: stylized-concept. Asset type: premium SaaS loading mascot illustration. Input image is CHARACTER IDENTITY AND MATERIAL REFERENCE ONLY, do NOT copy its cactus or hugging pose. Same matte charcoal BLACK SWAN, graceful long curved neck, ivory-white beak, sculpted layered feathers, bright expressive eyes, soft tactile ceramic-paper texture, elegant grownup playful 3D render. Entire subject and props visible in square composition, generous 10% transparent margin all sides. Soft studio light on object only. Real transparent alpha background, no floor, no backdrop, no halo, no text, logo, UI or watermark. Swan remains black; props may use tasteful bright colors. Scene24: Fashionably ridiculous. The swan stands pigeon-toed on both webbed feet, neck tilted far to one side in a curious exaggerated S-curve. Enormous thick sunny-yellow round eyeglass frames perched on its white beak, so oversized that the lenses dwarf its head. One wing delicately pinches the outside edge of the glasses to keep them from sliding off, other wing tucked, eyes peering over the top skeptically. Small pink bowtie at base of neck. Clear full body from jaunty head to feet, asymmetrical comedic pose, no other objects. Beak and big eyes recognizable, polished tactile black-feather character.",
+      "src": "/assets/research-scenes/scene-24.webp",
+      "file": "scene-24.webp",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "reused": false,
+      "bytes": 135506
+    },
+    {
+      "number": 25,
+      "title": "Eight arms, one friend",
+      "prompt": "Use case: stylized-concept. Asset type: premium SaaS loading mascot illustration. Input image is CHARACTER IDENTITY AND MATERIAL REFERENCE ONLY, do NOT copy its cactus or hugging pose. Same matte charcoal BLACK SWAN, graceful long curved neck, ivory-white beak, sculpted layered feathers, bright expressive eyes, soft tactile ceramic-paper texture, elegant grownup playful 3D render. Entire subject and props visible in square composition, generous 10% transparent margin all sides. Soft studio light on object only. Real transparent alpha background, no floor, no backdrop, no halo, no text, logo, UI or watermark. Swan remains black; props may use tasteful bright colors. Scene25: A delightfully ridiculous pool-toy wrestling match. Swan lying gently on its side with both feet in the air, laughing happily, both wings tangled playfully around a bright coral-orange inflatable toy octopus about half its size. The toy has simple friendly round eyes, shiny vinyl seams and eight short soft rounded tentacles wrapping loosely around the swan body, nothing threatening. Swan neck curls back to look at the toy, ivory beak open in amused surprise. Very different low sideways rolling silhouette, entire character and complete toy uncropped. No water, no floor, no text. Clear cheerful slapstick energy.",
+      "src": "/assets/research-scenes/scene-25.webp",
+      "file": "scene-25.webp",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "reused": false,
+      "bytes": 150004
+    },
+    {
+      "number": 26,
+      "title": "A little magic",
+      "prompt": "Use case: stylized-concept. Asset type: transparent premium SaaS loading mascot illustration. Input image is CHARACTER IDENTITY AND MATERIAL REFERENCE ONLY. Make a new scene featuring the same elegant charcoal BLACK SWAN, ivory white beak, graceful long neck, layered sculpted feathers, expressive eyes, refined soft tactile ceramic-paper 3D render. Scene 26: delighted magician swan popping upward out of an oversized IVORY TOP HAT with a simple black ribbon. Lower body tucked inside hat; neck high, head tilted proudly. One feathered wing pulls a long candy-pink silk scarf out of the hat; the other spreads in a theatrical flourish. Entire hat, swan and flowing scarf visible, three-quarter angle, joyful asymmetric pose. True transparent alpha background, centered square composition with 12% margin. No cactus, no pot, no text, numbers, logos, UI, backdrop, floor, glow or atmosphere. Soft studio light on objects only. Black swan remains black, white beak; pink scarf is the single bright accent.",
+      "src": "/assets/research-scenes/scene-26.webp",
+      "file": "scene-26.webp",
+      "reused": false,
+      "width": 1254,
+      "height": 1254,
+      "bytes": 144890,
+      "alpha": true
+    },
+    {
+      "number": 27,
+      "title": "Finding your balance",
+      "prompt": "Use case: stylized-concept. Asset type: transparent premium loading mascot illustration. Input image is only character and material reference. Same elegant matte charcoal BLACK SWAN, ivory white beak, expressive eyes, long graceful neck, sculpted layered feathers, tactile ceramic-paper 3D. NEW Scene 27: swan attempting an absurdly elegant yoga tree pose on a small rolled-out lilac yoga mat. Balancing on exactly one webbed foot; other foot tucked against standing leg. Both wings lifted overhead like a yoga stretch; elongated swan neck makes an amusing loose pretzel-like loop and head pokes through gracefully, smiling peacefully, no injury. Compact expressive full-body pose, entire swan and entire mat visible. No cactus or pot. Square clean cutout, 12% margin. True transparent alpha background, no floor beyond mat, no backdrop, glow, haze, writing, UI or logos. Soft studio illumination only on objects; black feather body with white beak, mat muted lilac.",
+      "src": "/assets/research-scenes/scene-27.webp",
+      "file": "scene-27.webp",
+      "reused": false,
+      "width": 1254,
+      "height": 1254,
+      "bytes": 133412,
+      "alpha": true
+    },
+    {
+      "number": 28,
+      "title": "Conducting possibilities",
+      "prompt": "Use case: stylized-concept. Asset type: transparent premium loading mascot illustration. Input image is CHARACTER IDENTITY AND MATERIAL REFERENCE ONLY. Same elegant matte charcoal BLACK SWAN, white ivory beak, long curved neck, expressive eyes and sculpted layered feathers, soft tactile ceramic-paper premium 3D. NEW scene28: full-body black swan as a passionate tiny orchestra conductor, body leaning forward, one wing lifting a slender ivory baton high, other wing extended low dramatically. Swan looks upward at THREE small separate puffy ivory clouds floating in an arc, one cloud above left, one above, one upper right, each only palm sized relative to swan. A few tiny warm golden diamond-shaped sculptural sparks between clouds, NO text or music notation. Bright yellow miniature bow tie around base of neck. Entire composition isolated and fully visible, square with equal12%transparent padding. Grownup whimsical charming editorial render, soft studio light on objects only. Genuine transparent alpha background, no cloudy scenery, no background, no glow, halo, floor, shadowsheet, text, watermarks or logos. No cactus, no pot. Asymmetrical conducting pose distinct from reference.",
+      "src": "/assets/research-scenes/scene-28.webp",
+      "file": "scene-28.webp",
+      "reused": false,
+      "width": 1254,
+      "height": 1254,
+      "bytes": 145896,
+      "alpha": true
+    },
+    {
+      "number": 29,
+      "title": "A deeper cup of research",
+      "prompt": "Use case: stylized-concept. Asset type: transparent premium playful SaaS loading mascot illustration. Image reference only defines character identity and tactile material. Same matte charcoal BLACK SWAN, ivory white beak, gracefully long curved neck, expressive eyes, layered sculpted feathers, polished ceramic-paper 3D. NEW scene29: brave little swan inexplicably snorkeling in an oversized round white porcelain TEACUP with a big curved handle. Swan body nestled in shallow water inside cup, long neck rising out, pale powder blue diving goggles over eyes and short pale blue snorkel sticking up alongside head. One wing hangs over cup rim, one black webbed foot sticks over the opposite rim. Swan looks curiously downward through goggles. Tiny sculptural water splash at cup rim, no surrounding water or floor. Playful low horizontal silhouette, entire cup, handle and swan visible. Square centered scene with clear12%padding. Real transparent alpha background. Soft studio illumination on objects only, no backdrop, glow, halo, text, letters, UI, logos. No cactus, pot or magnifier. Understated premium humorous aesthetic.",
+      "src": "/assets/research-scenes/scene-29.webp",
+      "file": "scene-29.webp",
+      "reused": false,
+      "width": 1254,
+      "height": 1254,
+      "bytes": 143682,
+      "alpha": true
+    },
+    {
+      "number": 30,
+      "title": "Dreaming beyond the obvious",
+      "prompt": "Use case: stylized-concept. Asset type: transparent premium playful SaaS loading mascot illustration. Supplied image is solely a CHARACTER IDENTITY AND MATERIAL reference. Create SAME matte charcoal BLACK SWAN, graceful long neck, ivory white beak, sculpted layered feathers and expressive eyes, premium tactile ceramic-paper 3D. NEW Scene30: swan curled snugly asleep in the lower bowl of a thick oversized butter-yellow CRESCENT MOON. Body lying horizontally nestled in moon, neck folded softly so closed-eyed head rests on its own feather wing like a pillow; tiny powder-blue floppy sleeping nightcap with cream pompom. Two black webbed feet dangle lazily over crescent lower rim. Peaceful funny sleeping pose, compact asymmetric scene. Moon is a matte sculptural prop, not sky; no stars or night backdrop, NO fishing rod. Entire crescent moon and character uncropped with generous12%transparent margins, centered square composition, soft studio light on objects. Actual transparent alpha background, no horizon, floor, glow, halo, text, lettering, UI, logos, watermarks. No cactus or pot. Body remains black, beak white, moon pastel yellow.",
+      "src": "/assets/research-scenes/scene-30.webp",
+      "file": "scene-30.webp",
+      "reused": false,
+      "width": 1254,
+      "height": 1254,
+      "bytes": 134016,
+      "alpha": true
     }
   ]
 }

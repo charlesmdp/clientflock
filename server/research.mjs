@@ -43,7 +43,7 @@ function view(row){
   const contactView=contact=>{
    if(!contact||typeof contact!=='object')return null;
    const result=publicContact(contact);
-   if(contact.person&&typeof contact.person==='object')result.person=Object.fromEntries(['firstName','lastName','fullName','title','profileUrl'].filter(k=>typeof contact.person[k]==='string').map(k=>[k,contact.person[k]]));
+   if(contact.person&&typeof contact.person==='object')result.person=Object.fromEntries(['firstName','lastName','fullName','title','profileUrl','sourceUrl'].filter(k=>typeof contact.person[k]==='string').map(k=>[k,contact.person[k]]));
    return result;
   };
   data.contacts=Object.fromEntries(Object.entries(data.contacts).filter(([key])=>/^[0-2]$/.test(key)).map(([key,value])=>[key,contactView(value)]));
@@ -236,6 +236,34 @@ async function advance(env,row){
  return view(await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(row.id).first());
 }
 async function save(env,row,lease,{data,stage,responseId,status='working'}){await env.DB.prepare('UPDATE searches SET data=?,stage=?,response_id=?,status=?,lease=NULL,lease_until=0,error=NULL,updated_at=? WHERE id=? AND lease=?').bind(JSON.stringify(data),stage,responseId,status,Date.now(),row.id,lease).run();}
+async function nextBatch(request,env,parent){
+ const previous=JSON.parse(parent.data),page=Number(previous.pagination?.page||1)+1;
+ if(parent.status!=='complete'||requiresRequalification(previous)||previous.qualification?.status!=='verified')return json({error:'Finish and verify this shortlist before finding more customers.'},409);
+ if(page>3)return json({error:'You have explored all nine customers available in this research.'},409);
+ if(!['mission','market','idealClients'].every(key=>typeof previous[key]?.document==='string'&&previous[key].document.trim())||!previous.understanding?.profile)return json({error:'This saved research needs a complete business playbook before finding more customers.'},409);
+ const rootId=previous.pagination?.rootId||parent.id,cacheKey=await hash(CACHE_VERSION+':next:'+rootId+':'+page);
+ let next=await env.DB.prepare('SELECT * FROM searches WHERE cache_key=?').bind(cacheKey).first();
+ if(next&&next.expires_at>Date.now())return json({...view(next),cached:next.status==='complete',joined:next.status==='working'});
+ // Reserve the parent before charging a start budget. Repeated clicks share one next batch.
+ const now=Date.now(),lease=crypto.randomUUID();
+ const claimed=await env.DB.prepare("UPDATE searches SET lease=?,lease_until=? WHERE id=? AND lease_until<? AND status='complete' RETURNING id").bind(lease,now+30000,parent.id,now).first();
+ if(!claimed)return json({error:'Another lookup is finishing. Please try again in a moment.'},409);
+ try{
+  next=await env.DB.prepare('SELECT * FROM searches WHERE cache_key=?').bind(cacheKey).first();
+  if(next&&next.expires_at>Date.now())return json({...view(next),cached:next.status==='complete',joined:next.status==='working'});
+  const day=new Date().toISOString().slice(0,10),identity=await hash(request.headers.get('cf-connecting-ip')||request.headers.get('oai-authenticated-user-id')||'local');
+  await budget(env.DB,'user:'+day+':'+identity,5);await budget(env.DB,'jobs:'+day,Number(env.DAILY_SEARCH_LIMIT||20));
+  if(next)await env.DB.prepare('DELETE FROM searches WHERE id=? AND expires_at<=?').bind(next.id,now).run();
+  const data=Object.fromEntries(['understanding','mission','market','idealClients'].map(key=>[key,previous[key]]));
+  data.qualification={version:QUALIFICATION_VERSION,status:'pending',requiredPlatforms:requiredPlatforms(data.understanding.profile)};
+  data.rejectedDomains=[...new Set([...(previous.rejectedDomains||[]),...(previous.leads||[]).map(lead=>normalizeInput({website:lead.website}).value)])];
+  data.pagination={page,previousId:parent.id,rootId,maxPages:3};
+  const id=crypto.randomUUID();
+  await env.DB.prepare("INSERT OR IGNORE INTO searches(id,cache_key,input,data,stage,created_at,updated_at,expires_at) VALUES(?,?,?,?,4,?,?,?)").bind(id,cacheKey,parent.input,JSON.stringify(data),now,now,parent.expires_at).run();
+  next=await env.DB.prepare('SELECT * FROM searches WHERE cache_key=?').bind(cacheKey).first();
+  return json({...view(next),cached:false},202);
+ }finally{await env.DB.prepare('UPDATE searches SET lease=NULL,lease_until=0 WHERE id=? AND lease=?').bind(parent.id,lease).run();}
+}
 export async function api(request,env){
  const url=new URL(request.url);if(!url.pathname.startsWith('/api/'))return null;
  if(url.pathname==='/api/health')return json({ready:!!(env.DB&&configured(env)),storage:!!env.DB,research:configured(env),contacts:!!(env.DB&&env.ICYPEAS_API_KEY)});
@@ -252,9 +280,10 @@ export async function api(request,env){
    const id=crypto.randomUUID(),now=Date.now(),data={qualification:{version:QUALIFICATION_VERSION,status:'pending',requiredPlatforms:[]}};await env.DB.prepare('INSERT OR IGNORE INTO searches(id,cache_key,input,data,created_at,updated_at,expires_at) VALUES(?,?,?,?,?,?,?)').bind(id,cacheKey,JSON.stringify(input),JSON.stringify(data),now,now,now+7*DAY).run();
    row=await env.DB.prepare('SELECT * FROM searches WHERE cache_key=?').bind(cacheKey).first();return json({...view(row),cached:false},202);
   }
-  const match=url.pathname.match(/^\/api\/search\/([a-f0-9-]{36})(?:\/(advance|retry|contacts|requalify))?$/);if(!match)return json({error:'Not found.'},404);
+  const match=url.pathname.match(/^\/api\/search\/([a-f0-9-]{36})(?:\/(advance|retry|contacts|requalify|more))?$/);if(!match)return json({error:'Not found.'},404);
   let row=await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(match[1]).first();if(!row||row.expires_at<Date.now())return json({error:'This search has expired. Start a new search.'},404);
   if(request.method==='GET'&&!match[2])return json(view(row));
+  if(request.method==='POST'&&match[2]==='more')return await nextBatch(request,env,row);
   if(request.method==='POST'&&match[2]==='requalify'){
    if(!requiresRequalification(JSON.parse(row.data)))return json(view(row));
    if(row.lease_until>Date.now())return json({error:'A previous research step is finishing. Please retry the platform check shortly.'},409);

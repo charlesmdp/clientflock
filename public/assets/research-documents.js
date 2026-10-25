@@ -213,5 +213,15 @@
     return () => { controller.abort(); if (bindings.get(container) === controller) bindings.delete(container); };
   }
 
-  window.ClientFlockDocuments = Object.freeze({ render, bind });
+  function renderRows(data = {}) {
+    return '<section class="rf-documents-list" aria-label="Your business research"><div class="rf-documents-label"><span>Your business, in focus</span><small>' + definitions.filter(definition => isReady(data[definition.key])).length + '/3 ready</small></div>' + definitions.map(definition => {
+      const ready = isReady(data[definition.key]);
+      return '<button class="rf-document-row" data-document="' + definition.key + '" data-focus="document-' + definition.key + '"><span class="rf-document-icon" data-motif="' + definition.motif + '">' + motif(definition.motif) + '</span><span><strong>' + definition.label + '</strong><small>' + definition.description + '</small></span><span class="rf-document-state">' + (ready ? '' : 'Coming up') + '</span><span class="rf-document-chevron" aria-hidden="true">›</span></button>';
+    }).join('') + '</section>';
+  }
+  function renderSingle(data = {}, key = 'mission') {
+    const definition = definitions.find(item => item.key === key) || definitions[0];
+    return '<section class="cf-documents"><div class="cf-doc-panel" data-cf-doc-active="' + definition.key + '">' + (isReady(data[definition.key]) ? paper(data[definition.key], definition) : pending(definition)) + '</div></section>';
+  }
+  window.ClientFlockDocuments = Object.freeze({ render, bind, renderRows, renderSingle });
 })();

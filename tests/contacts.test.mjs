@@ -163,7 +163,7 @@ test('official discovery response is saved privately before a shop-owner email s
  const data=JSON.parse((await job.row()).data);data.leads[0].roleToContact='Owner or workshop operations manager';await job.env.DB.prepare('UPDATE searches SET data=? WHERE id=?').bind(JSON.stringify(data),job.id).run();
  globalThis.fetch=async(url,options)=>{
   calls++;assert.ok(url.endsWith('find-people'));const body=JSON.parse(options.body);
-  assert.deepEqual(body.query.currentCompanyWebsite.include,['acme.com']);assert.equal(body.pagination.size,3);
+  assert.deepEqual(body.query.currentCompanyWebsite.include,['acme.com']);assert.equal(body.pagination.size,10);
   for(const title of ['Owner','Business Owner','General Manager','Co-Founder'])assert.ok(body.query.currentJobTitle.include.includes(title));
   return Response.json({success:true,total:1,leads:[{...officialPerson,lastJobTitle:'Business Owner',description:'x'.repeat(100000)}],pagination:{size:3,token:'private-pagination'},apiKey:'must-not-be-retained'});
  };
@@ -172,7 +172,7 @@ test('official discovery response is saved privately before a shop-owner email s
   assert.equal(calls,1);assert.equal(result.contact.person.title,'Business Owner');assert.equal(result.contact.status,'working');
   assert.equal(result.contact.discoveryPayload,undefined);assert.equal(result.contact.discoveryCapturedAt,undefined);
   const saved=JSON.parse((await job.row()).data).contacts[0];
-  assert.equal(saved.phase,'person_ready');assert.equal(saved.discoveryParserVersion,2);assert.ok(saved.discoveryCapturedAt>0);
+  assert.equal(saved.phase,'person_ready');assert.equal(saved.discoveryParserVersion,3);assert.ok(saved.discoveryCapturedAt>0);
   assert.equal(saved.discoveryPayload.leads[0].lastCompanyWebsite,'https://www.acme.com');assert.equal(saved.discoveryPayload.apiKey,undefined);assert.equal(saved.discoveryPayload.pagination.token,undefined);
   assert.ok(JSON.stringify(saved.discoveryPayload).length<5000,'provider strings are bounded');
  }finally{globalThis.fetch=original;}
@@ -228,5 +228,168 @@ test('legacy recovery obeys the daily budget and unknown paid create outcomes st
   const ambiguous=await setup();await seedContact(ambiguous,{status:'working',phase:'person_ready',startedAt:123,person:{firstName:'Alex',lastName:'Miller'}});
   const failed=await(await handleContacts(request(),ambiguous.env,await ambiguous.row())).json();assert.equal(failed.contact.retryable,false);assert.match(failed.contact.message,/unknown outcome/);
   await clearCooldown(ambiguous);await handleContacts(request(0,true,true),ambiguous.env,await ambiguous.row());assert.equal(calls,1,'credit consent is never an override for an unknown email-create outcome');
+ }finally{globalThis.fetch=original;}
+});
+
+const noWebsiteContact=async()=>({status:'not_found',checkedAt:new Date().toISOString(),pagesChecked:2});
+const step=async(job,options={})=>{await clearCooldown(job);return (await handleContacts(request(),job.env,await job.row(),{findCompanyContacts:noWebsiteContact,...options})).json();};
+
+test('localized owners and department leaders are scored beyond the first three candidates',()=>{
+ for(const title of ['Gérante','Fondatrice','Proprietário','Sócio fundador','Geschäftsführer','Inhaber','President','Managing Director'])assert.equal(selectPerson({leads:[{...officialPerson,lastJobTitle:title}]},'acme.com','Owner').title,title);
+ const irrelevant=Array.from({length:8},()=>({...officialPerson,lastJobTitle:'Software Engineer'}));
+ assert.equal(selectPerson({leads:[...irrelevant,{...officialPerson,lastJobTitle:'Gerente de operações'}]},'acme.com','Operations Manager').title,'Gerente de operações');
+ assert.equal(selectPerson({leads:[{...officialPerson,lastJobTitle:'CEO'},{...officialPerson,firstname:'Dana',lastJobTitle:'Head of Marketing'}]},'acme.com','Marketing Director').firstName,'Dana');
+ assert.throws(()=>selectPerson({leads:[{...officialPerson,lastJobTitle:'Assistant to CEO'}]},'acme.com','CEO'));
+ assert.throws(()=>selectPerson({leads:[{...officialPerson,lastJobTitle:'Former Founder'}]},'acme.com','Founder'));
+ assert.throws(()=>selectPerson({leads:[{...officialPerson,lastJobTitle:'Founder',lastCompanyWebsite:'acme.com.evil.test'}]},'acme.com'));
+});
+
+test('an empty role query checks first-party pages then broadens only within the same company',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=[];
+ globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json({success:true,leads:calls.length===1?[]:[...Array.from({length:8},()=>({...officialPerson,lastJobTitle:'Engineer'})),{...officialPerson,lastJobTitle:'Gérante'}]});};
+ try{
+  const first=await step(job);assert.equal(first.contact.status,'working');assert.match(first.contact.message,/contact and team pages/);assert.equal(calls.length,1);
+  const website=await step(job);assert.equal(website.contact.status,'working');assert.match(website.contact.message,/Broadening/);assert.equal(calls.length,1,'company HTTP stage does not query Icypeas');
+  const broad=await step(job);assert.equal(broad.contact.person.title,'Gérante');assert.equal(calls.length,2);
+  assert.equal(calls[0].body.pagination.size,10);assert.ok(calls[0].body.query.currentJobTitle.include.includes('Gérant'));
+  assert.deepEqual(calls[1].body,{query:{currentCompanyWebsite:{include:['acme.com']}},pagination:{size:20}});
+  const day=new Date().toISOString().slice(0,10);assert.equal((await job.env.DB.prepare('SELECT count FROM budgets WHERE key=?').bind('icypeas:daily:'+day).first()).count,2);
+  const saved=JSON.parse((await job.row()).data).contacts[0];assert.equal(saved.discoveryPayload.leads.length,9,'later candidates survive durable snapshot');
+ }finally{globalThis.fetch=original;}
+});
+
+test('exhausted broad search is a coverage result, cached and never automatically repeated',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=0;
+ globalThis.fetch=async()=>{calls++;return Response.json({success:true,leads:[]});};
+ try{
+  await step(job);await step(job);const final=await step(job);
+  assert.equal(final.contact.status,'not_found');assert.equal(final.contact.retryable,false);assert.match(final.contact.message,/Icypeas is connected/);assert.equal(calls,2);
+  await handleContacts(request(0,true,true),job.env,await job.row());assert.equal(calls,2);
+ }finally{globalThis.fetch=original;}
+});
+
+test('legacy empty results need explicit broader lookup consent and are recovered once',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=0;
+ globalThis.fetch=async()=>{calls++;return Response.json({success:true,leads:[officialPerson]});};
+ try{
+  await seedContact(job,{status:'not_found',phase:'done',lastOperation:'discover',discoveryParserVersion:2,startedAt:123,message:'No matching current decision maker was found.',discoveryPayload:{success:true,leads:[]}});
+  const prior=await(await handleContacts(request(),job.env,await job.row())).json();assert.equal(prior.contact.errorCode,'people_no_match');assert.equal(prior.contact.retryable,true);assert.equal(prior.contact.requiresNewLookup,true);
+  await handleContacts(request(0,true),job.env,await job.row());assert.equal(calls,0,'retry alone does not authorize additional discovery');
+  const resumed=await(await handleContacts(request(0,true,true),job.env,await job.row())).json();assert.equal(resumed.contact.status,'working');assert.equal(calls,0,'reuse saved response before choosing fallback');
+  await step(job);const found=await step(job);assert.equal(found.contact.person.fullName,'Alex Miller');assert.equal(calls,1,'does not repeat original narrow query');
+  assert.equal(JSON.parse((await job.row()).data).contacts[0].noMatchRecoveryCount,1);
+ }finally{globalThis.fetch=original;}
+});
+
+test('broader query respects daily budget and can safely resume next day',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=0;
+ globalThis.fetch=async()=>{calls++;return Response.json({success:true,leads:[officialPerson]});};
+ try{
+  await seedContact(job,{status:'working',phase:'discover',discoveryMode:'broad',discoveryBudgetReady:false,startedAt:123,websiteChecked:true});
+  const day=new Date().toISOString().slice(0,10);await job.env.DB.prepare('INSERT INTO budgets(key,count) VALUES(?,?)').bind('icypeas:daily:'+day,30).run();
+  const capped=await handleContacts(request(),job.env,await job.row());assert.equal(capped.status,429);const cap=await capped.json();assert.equal(cap.contact.errorCode,'daily_limit');assert.equal(cap.contact.status,'error');assert.equal(cap.contact.retryable,true);assert.ok(cap.retryAfterMs>0);assert.equal(calls,0);
+  await handleContacts(request(0,true,true),job.env,await job.row());assert.equal(calls,0);
+  const data=JSON.parse((await job.row()).data);data.contacts[0].budgetRetryAt=Date.now()-1;await job.env.DB.prepare('UPDATE searches SET data=? WHERE id=?').bind(JSON.stringify(data),job.id).run();await job.env.DB.prepare('DELETE FROM budgets WHERE key=?').bind('icypeas:daily:'+day).run();
+  const resumed=await(await handleContacts(request(0,true,true),job.env,await job.row())).json();assert.equal(resumed.contact.person.fullName,'Alex Miller');assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+});
+
+test('published company inbox must be verified and never impersonates a named decision maker',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=[];
+ const website={findCompanyContacts:async()=>({status:'found',email:{email:'hello@acme.com',kind:'company_mailbox',sourceUrl:'https://acme.com/contact',published:true,verified:false},checkedAt:new Date().toISOString(),pagesChecked:2})};
+ globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});if(url.endsWith('find-people'))return Response.json({success:true,leads:[]});if(url.endsWith('email-verification'))return Response.json({success:true,item:{_id:'verification-1',status:'NONE'}});return Response.json({success:true,items:[{_id:'verification-1',status:'DEBITED',results:{emails:[{email:'hello@acme.com',certainty:'ultra_sure'}]}}]});};
+ try{
+  await step(job);const published=await step(job,website);assert.equal(published.contact.status,'working');assert.equal(published.contact.contactKind,'company_mailbox');assert.equal(published.contact.email,undefined);assert.equal(published.contact.pendingEmail,undefined);assert.equal(published.contact.person,undefined);assert.equal(calls.length,1);
+  await step(job);assert.equal(calls[1].url,'https://app.icypeas.com/api/email-verification');assert.equal(calls[1].body.email,'hello@acme.com');assert.equal(JSON.parse((await job.row()).data).contacts[0].providerId,'verification-1');
+  const verified=await step(job);assert.equal(verified.contact.status,'found');assert.equal(verified.contact.email,'hello@acme.com');assert.equal(verified.contact.contactKind,'company_mailbox');assert.equal(verified.contact.sourceUrl,'https://acme.com/contact');assert.equal(verified.contact.person,undefined);assert.match(verified.contact.message,/not a named person/);
+  await step(job);assert.equal(calls.length,3,'verified company inbox is cached');
+ }finally{globalThis.fetch=original;}
+});
+
+test('first-party named founder skips broader discovery and preserves source evidence',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=[];
+ const website={findCompanyContacts:async()=>({status:'found',person:{firstName:'Alex',lastName:'Miller',fullName:'Alex Miller',title:'Founder',profileUrl:officialPerson.profileUrl,sourceUrl:'https://acme.com/team'},checkedAt:new Date().toISOString(),pagesChecked:2})};
+ globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return url.endsWith('find-people')?Response.json({success:true,leads:[]}):Response.json({success:true,item:{_id:'named-1',status:'NONE'}});};
+ try{
+  await step(job);const person=await step(job,website);assert.equal(person.contact.person.fullName,'Alex Miller');assert.equal(person.contact.person.sourceUrl,'https://acme.com/team');assert.equal(person.contact.contactKind,'person');assert.equal(calls.length,1);
+  await step(job);assert.equal(calls[1].url,'https://app.icypeas.com/api/email-search');assert.equal(calls[1].body.firstname,'Alex');assert.equal(calls[1].body.lastname,'Miller');assert.equal(calls[1].body.domainOrCompany,'acme.com');
+ }finally{globalThis.fetch=original;}
+});
+
+test('unrelated website contacts and mismatched verification results are rejected',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=0;globalThis.fetch=async()=>{calls++;return Response.json({success:true,leads:[]});};
+ try{
+  await step(job);const unsafe=await step(job,{findCompanyContacts:async()=>({status:'found',email:{email:'hello@evil.com',sourceUrl:'https://evil.com/contact',published:true},person:{firstName:'Alex',lastName:'Miller',title:'Founder',profileUrl:officialPerson.profileUrl,sourceUrl:'https://evil.com/team'}})});
+  assert.equal(unsafe.contact.email,undefined);assert.equal(unsafe.contact.person,undefined);assert.match(unsafe.contact.message,/Broadening/);assert.equal(calls,1);
+  assert.throws(()=>parseEmailResult({items:[{_id:'v1',status:'DEBITED',results:{emails:[{email:'different@acme.com',certainty:'ultra_sure'}]}}]},'v1','acme.com','hello@acme.com'));
+ }finally{globalThis.fetch=original;}
+});
+
+test('unknown verification outcome remains nonretryable after website fallback',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=0;
+ globalThis.fetch=async()=>{calls++;throw new DOMException('Timed out','TimeoutError');};
+ try{
+  await seedContact(job,{status:'working',phase:'email_ready',contactKind:'company_mailbox',pendingEmail:'hello@acme.com',sourceUrl:'https://acme.com/contact',startedAt:123});
+  const failed=await step(job);assert.equal(failed.contact.status,'error');assert.equal(failed.contact.retryable,false);assert.match(failed.contact.message,/unknown outcome/);
+  await clearCooldown(job);await handleContacts(request(0,true,true),job.env,await job.row());assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+});
+
+test('a definite missing personal email falls back once to a published company inbox',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=[],crawls=0;
+ const website={findCompanyContacts:async()=>{crawls++;return {status:'found',email:{email:'hello@acme.com',sourceUrl:'https://acme.com/contact',published:true},person:{firstName:'Alex',lastName:'Miller',title:'Founder',profileUrl:officialPerson.profileUrl,sourceUrl:'https://acme.com/team'}};}};
+ globalThis.fetch=async(url,options)=>{const body=JSON.parse(options.body);calls.push({url,body});if(url.endsWith('find-people'))return Response.json({success:true,leads:[officialPerson]});if(url.endsWith('email-search'))return Response.json({success:true,item:{_id:'personal-1'}});if(url.endsWith('email-verification'))return Response.json({success:true,item:{_id:'published-1'}});return body.id==='personal-1'?Response.json({items:[{_id:'personal-1',status:'DEBITED_NOT_FOUND'}]}):Response.json({items:[{_id:'published-1',status:'DEBITED',results:{emails:[{email:'hello@acme.com',certainty:'very_sure'}]}}]});};
+ try{
+  await step(job);await step(job);const missing=await step(job);assert.equal(missing.contact.status,'working');assert.match(missing.contact.message,/published contact details/);
+  const published=await step(job,website);assert.equal(published.contact.contactKind,'company_mailbox');assert.equal(published.contact.person,undefined);assert.equal(crawls,1);
+  await step(job);await job.env.DB.prepare('DELETE FROM budgets WHERE key=?').bind('icypeas:readslot:'+Math.floor(Date.now()/3000)).run();const verified=await step(job);assert.equal(verified.contact.email,'hello@acme.com');assert.equal(verified.contact.status,'found');assert.equal(calls.filter(c=>c.url.endsWith('email-search')).length,1);
+  const saved=JSON.parse((await job.row()).data).contacts[0];assert.equal(saved.previousProviderId,'personal-1');assert.equal(saved.providerId,'published-1');assert.equal(saved.previousPerson.fullName,'Alex Miller');assert.equal(verified.contact.previousProviderId,undefined);
+ }finally{globalThis.fetch=original;}
+});
+
+test('website returns both person and inbox, so personal NOT_FOUND reuses the saved mailbox without another crawl',async()=>{
+ const original=globalThis.fetch,job=await setup();let crawls=0,calls=[];
+ const website={findCompanyContacts:async()=>{crawls++;return {status:'found',email:{email:'bookings@mail.acme.com',sourceUrl:'https://acme.com/contact',published:true},person:{firstName:'Alex',lastName:'Miller',title:'Founder',profileUrl:officialPerson.profileUrl,sourceUrl:'https://acme.com/team'}};}};
+ globalThis.fetch=async(url,options)=>{calls.push(url);if(url.endsWith('find-people'))return Response.json({success:true,leads:[]});if(url.endsWith('email-search'))return Response.json({success:true,item:{_id:'personal-1'}});if(url.endsWith('email-verification'))return Response.json({success:true,item:{_id:'verification-1'}});return Response.json({items:[{_id:'personal-1',status:'NOT_FOUND'}]});};
+ try{
+  await step(job);await step(job,website);await step(job);const missing=await step(job);assert.equal(missing.contact.status,'working');assert.equal(missing.contact.contactKind,'company_mailbox');assert.equal(missing.contact.email,undefined);
+  await step(job,website);assert.equal(crawls,1);assert.equal(calls.filter(u=>u.endsWith('email-search')).length,1);assert.equal(calls.filter(u=>u.endsWith('email-verification')).length,1);
+  assert.equal(JSON.parse((await job.row()).data).contacts[0].pendingEmail,'bookings@mail.acme.com');
+ }finally{globalThis.fetch=original;}
+});
+
+test('an undeliverable website inbox continues to the bounded broad search without ever verifying it twice',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=[];
+ const website={findCompanyContacts:async()=>({status:'found',email:{email:'hello@acme.com',sourceUrl:'https://acme.com/contact',published:true}})};
+ globalThis.fetch=async(url,options)=>{const body=JSON.parse(options.body);calls.push({url,body});if(url.endsWith('find-people'))return Response.json({success:true,leads:body.query.currentJobTitle?[]:[officialPerson]});if(url.endsWith('email-verification'))return Response.json({success:true,item:{_id:'bad-inbox'}});if(url.endsWith('email-search'))return Response.json({success:true,item:{_id:'named-inbox'}});return Response.json({items:[{_id:body.id,status:'NOT_FOUND'}]});};
+ try{
+  await step(job);await step(job,website);await step(job);const invalid=await step(job);assert.equal(invalid.contact.status,'working');assert.match(invalid.contact.message,/Broadening/);
+  const broad=await step(job);assert.equal(broad.contact.person.fullName,'Alex Miller');await step(job);await job.env.DB.prepare('DELETE FROM budgets WHERE key=?').bind('icypeas:readslot:'+Math.floor(Date.now()/3000)).run();const last=await step(job);assert.equal(last.contact.status,'not_found');
+  await step(job);assert.equal(calls.filter(c=>c.url.endsWith('email-verification')).length,1);assert.equal(calls.filter(c=>c.url.endsWith('email-search')).length,1);assert.equal(calls.filter(c=>c.url.endsWith('find-people')).length,2);
+ }finally{globalThis.fetch=original;}
+});
+
+test('an interrupted or failed website fallback cannot restart a completed personal email search',async()=>{
+ const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('No provider replay is allowed');};
+ try{for(const phase of ['website','website_in_progress']){
+  const job=await setup();await seedContact(job,{status:'working',phase,startedAt:123,namedLookupFinished:true,previousProviderId:'completed-personal',discoveryMode:'targeted',websiteChecked:phase==='website_in_progress'});
+  const final=await step(job,{findCompanyContacts:async()=>{throw new DOMException('Timeout','TimeoutError');}});assert.equal(final.contact.status,'not_found');assert.equal(calls,0);
+  await handleContacts(request(0,true,true),job.env,await job.row());assert.equal(calls,0);
+ }}finally{globalThis.fetch=original;}
+});
+
+test('published-email verification resumes after the daily budget resets without repeating discovery',async()=>{
+ const original=globalThis.fetch,job=await setup();let calls=[];
+ globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json({success:true,item:{_id:'resumed-verification',status:'NONE'}});};
+ try{
+  await seedContact(job,{status:'working',phase:'email_ready',contactKind:'company_mailbox',pendingEmail:'hello@acme.com',sourceUrl:'https://acme.com/contact',startedAt:123,websiteChecked:true});
+  const day=new Date().toISOString().slice(0,10);await job.env.DB.prepare('INSERT INTO budgets(key,count) VALUES(?,?)').bind('icypeas:daily:'+day,30).run();
+  const capped=await handleContacts(request(),job.env,await job.row());assert.equal(capped.status,429);const waiting=await capped.json();assert.equal(waiting.contact.errorCode,'daily_limit');assert.equal(waiting.contact.retryable,true);assert.equal(waiting.contact.requiresNewLookup,true);assert.ok(waiting.retryAfterMs>0);assert.equal(calls.length,0);
+  assert.equal(JSON.parse((await job.row()).data).contacts[0].phase,'email_ready');
+  await handleContacts(request(0,true,true),job.env,await job.row());assert.equal(calls.length,0,'cannot bypass the saved reset time');
+  const data=JSON.parse((await job.row()).data);data.contacts[0].budgetRetryAt=Date.now()-1;await job.env.DB.prepare('UPDATE searches SET data=? WHERE id=?').bind(JSON.stringify(data),job.id).run();await job.env.DB.prepare('DELETE FROM budgets WHERE key=?').bind('icypeas:daily:'+day).run();
+  const row=await job.row();await Promise.all([handleContacts(request(0,true,true),job.env,row),handleContacts(request(0,true,true),job.env,row)]);
+  assert.equal(calls.length,1,'concurrent retries submit verification once');assert.equal(calls[0].url,'https://app.icypeas.com/api/email-verification');assert.equal(calls[0].body.email,'hello@acme.com');
+  const saved=JSON.parse((await job.row()).data).contacts[0];assert.equal(saved.phase,'poll');assert.equal(saved.providerId,'resumed-verification');assert.equal(saved.verificationBudgetReady,true);assert.equal(saved.errorCode,undefined);
  }finally{globalThis.fetch=original;}
 });
