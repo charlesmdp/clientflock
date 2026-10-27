@@ -157,10 +157,9 @@
     const firstHeading = markdown.match(/^#\s+([^\n]+)\n?/);
     const title = String(presentation.title || firstHeading?.[1] || definition.label);
     if (firstHeading) markdown = markdown.slice(firstHeading[0].length).trim();
-    const highlights = Array.isArray(presentation.highlights) ? presentation.highlights.filter(item => item && (item.label || item.text)).slice(0, 4) : [];
     const language = /^[a-z]{2,3}(?:-[a-zA-Z]{2,8})*$/.test(document.languageCode || '') ? document.languageCode : null;
     const references = sourceList(document);
-    return '<article class="cf-doc-paper"' + (language ? ' lang="' + esc(language) + '"' : '') + '><div class="cf-doc-paper-top"><span class="cf-doc-edition"><span>' + definition.number + '</span> ' + definition.label + '</span><button type="button" class="cf-doc-download" data-cf-doc-download="' + definition.key + '">' + downloadIcon + '<span>Save document</span></button></div><header class="cf-doc-paper-header"><div class="cf-doc-paper-mark" aria-hidden="true">' + motif(definition.motif) + '</div><h3>' + inline(title, 0, false) + '</h3>' + (presentation.subtitle ? '<p class="cf-doc-lede">' + inline(presentation.subtitle) + '</p>' : '') + '</header>' + (highlights.length ? '<dl class="cf-doc-highlights">' + highlights.map(item => '<div><dt>' + esc(item.label) + '</dt><dd>' + inline(item.text) + '</dd></div>').join('') + '</dl>' : '') + '<div class="cf-doc-prose">' + blocks(markdown) + '</div>' + (references.length ? '<footer class="cf-doc-references"><div class="cf-doc-reference-heading"><h4>Sources</h4><span>' + references.length + ' reference' + (references.length === 1 ? '' : 's') + '</span></div><div class="cf-doc-source-list">' + references.map((source, index) => '<a class="cf-doc-source" href="' + esc(source.url) + '" target="_blank" rel="noopener noreferrer"><span class="cf-doc-source-number">' + String(index + 1).padStart(2, '0') + '</span><span class="cf-doc-source-text"><strong>' + esc(source.title) + '</strong><small>' + esc(source.host) + '</small></span>' + arrowIcon + '</a>').join('') + '</div></footer>' : '') + '</article>';
+    return '<article class="cf-doc-paper"' + (language ? ' lang="' + esc(language) + '"' : '') + '><div class="cf-doc-paper-top"><span class="cf-doc-edition"><span>' + definition.number + '</span> ' + definition.label + '</span><div class="cf-doc-exports" aria-label="Export document"><button type="button" class="cf-doc-download cf-doc-download-md" data-cf-doc-download="' + definition.key + '">' + downloadIcon + '<span>Markdown</span></button><button type="button" class="cf-doc-download" data-cf-doc-print="' + definition.key + '" title="Opens your print dialog. Choose Save as PDF.">' + downloadIcon + '<span>Export PDF</span></button></div></div><header class="cf-doc-paper-header"><div class="cf-doc-paper-mark" aria-hidden="true">' + motif(definition.motif) + '</div><h3>' + inline(title, 0, false) + '</h3>' + (presentation.subtitle ? '<p class="cf-doc-lede">' + inline(presentation.subtitle) + '</p>' : '') + '</header>' + '<div class="cf-doc-prose">' + blocks(markdown) + '</div>' + (references.length ? '<footer class="cf-doc-references"><div class="cf-doc-reference-heading"><h4>Sources</h4><span>' + references.length + ' reference' + (references.length === 1 ? '' : 's') + '</span></div><div class="cf-doc-source-list">' + references.map((source, index) => '<a class="cf-doc-source" href="' + esc(source.url) + '" target="_blank" rel="noopener noreferrer"><span class="cf-doc-source-number">' + String(index + 1).padStart(2, '0') + '</span><span class="cf-doc-source-text"><strong>' + esc(source.title) + '</strong><small>' + esc(source.host) + '</small></span>' + arrowIcon + '</a>').join('') + '</div></footer>' : '') + '</article>';
   }
 
   function pending(definition) {
@@ -175,6 +174,85 @@
     }).join('') + '</div><div id="cf-doc-panel" class="cf-doc-panel" data-cf-doc-active="' + selected.key + '" role="tabpanel" aria-labelledby="cf-doc-tab-' + selected.key + '" tabindex="0">' + (isReady(data?.[selected.key]) ? paper(data[selected.key], selected) : pending(selected)) + '</div></section>';
   }
 
+  function markdownExport(research) {
+    const body = research.document.trim(), references = sourceList(research);
+    const additional = references.filter(source => !body.includes(source.url));
+    return body + (additional.length ? '\n\n## Sources\n\n' + additional.map(source => '- ' + source.title.replace(/[\r\n]+/g, ' ') + ': <' + source.url + '>').join('\n') : '') + '\n';
+  }
+
+  // Browser-native PDF export preserves Unicode, links and the document's own language.
+  // A separate print document keeps the results, overlays and controls out of the PDF.
+  let printFrame = null;
+  function printDocument(research, definition) {
+    printFrame?.remove();
+    const frame = document.createElement('iframe');
+    printFrame = frame;
+    frame.className = 'cf-doc-print-frame';
+    frame.setAttribute('title', 'Printable ' + definition.label);
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    const language = /^[a-z]{2,3}(?:-[a-zA-Z]{2,8})*$/.test(research.languageCode || '') ? research.languageCode : 'en';
+    const title = String(research.presentation?.title || definition.label);
+    const printStyle = `
+      @page { size: A4; margin: 18mm 17mm 19mm; }
+      * { box-sizing: border-box; }
+      html { color-scheme: light; }
+      body { color: #222; background: #fff; font: 11pt/1.65 Arial, Helvetica, sans-serif; margin: 0; }
+      .print-brand { border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 22px; font-weight: 700; font-size: 15pt; letter-spacing: -.6px; }
+      .print-brand small { float: right; font-size: 9pt; font-weight: 400; letter-spacing: 0; color: #555; padding-top: 6px; }
+      .cf-doc-paper-top { margin-bottom: 18px; }
+      .cf-doc-edition { color: #555; font-size: 9pt; text-transform: uppercase; letter-spacing: .7px; }
+      .cf-doc-edition > span { margin-right: 8px; }
+      .cf-doc-exports, .cf-doc-paper-mark, .cf-doc-source > svg { display: none; }
+      h3 { font-size: 28pt; line-height: 1.12; letter-spacing: -1px; margin: 0 0 12px; }
+      .cf-doc-lede { color: #555; font-size: 12pt; margin: 0 0 24px; }
+      .cf-doc-section { margin-top: 24px; }
+      .cf-doc-section-heading { border-top: 1px solid #ddd; padding-top: 15px; margin-bottom: 10px; break-after: avoid; }
+      .cf-doc-section-heading > span { display: inline-block; color: #777; font-size: 8pt; margin-right: 8px; vertical-align: 2px; }
+      .cf-doc-section-heading h4 { display: inline; }
+      h4 { font-size: 15pt; line-height: 1.3; margin: 18px 0 10px; }
+      h5, h6 { font-size: 11pt; margin: 16px 0 8px; }
+      h3, h4, h5, h6 { break-after: avoid; }
+      p { margin: 0 0 12px; orphans: 3; widows: 3; }
+      ul, ol { padding-left: 22px; margin: 12px 0 18px; }
+      li { padding-left: 4px; margin: 6px 0; }
+      a { color: #222; text-decoration-color: #999; text-underline-offset: 2px; overflow-wrap: anywhere; }
+      blockquote { margin: 16px 0; padding: 10px 16px; border-left: 2px solid #999; color: #444; }
+      .cf-doc-table-wrap { margin: 18px 0; overflow: visible; }
+      table { border-collapse: collapse; table-layout: fixed; width: 100%; font-size: 9pt; line-height: 1.5; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; }
+      th, td { border: 1px solid #ddd; text-align: left; padding: 9px; vertical-align: top; overflow-wrap: anywhere; }
+      th { background: #f4f4f4; font-weight: 700; }
+      .cf-doc-align-center { text-align: center; }
+      .cf-doc-align-right { text-align: right; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 9pt; padding: 12px; border: 1px solid #ddd; }
+      code { font-size: .9em; }
+      .cf-doc-references { border-top: 1px solid #ddd; margin-top: 26px; padding-top: 12px; }
+      .cf-doc-reference-heading > span { color: #666; font-size: 9pt; }
+      .cf-doc-reference-heading h4 { margin: 0 0 6px; }
+      .cf-doc-source { display: block; margin-top: 12px; font-size: 9pt; break-inside: avoid; text-decoration: none; }
+      .cf-doc-source-number { display: inline-block; width: 22px; color: #777; }
+      .cf-doc-source-text strong { font-weight: 600; }
+      .cf-doc-source-text small { display: none; }
+      .cf-doc-source::after { content: attr(href); display: block; color: #555; padding-left: 22px; font-size: 8pt; overflow-wrap: anywhere; }
+      .cf-doc-check { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 1px solid #777; }
+      .cf-doc-check svg { width: 9px; height: 9px; fill: none; stroke: #333; }
+    `;
+    const markup = '<!doctype html><html lang="' + esc(language) + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ClientFlock - ' + esc(title) + '</title><style>' + printStyle + '</style></head><body><div class="print-brand">ClientFlock<small>' + esc(definition.label) + '</small></div>' + paper(research, definition) + '</body></html>';
+    frame.addEventListener('load', () => {
+      const view = frame.contentWindow;
+      if (!view) return;
+      const cleanup = () => { frame.remove(); if (printFrame === frame) printFrame = null; };
+      view.addEventListener('afterprint', () => setTimeout(cleanup, 100), { once: true });
+      // No provider calls or remote assets are required to generate this PDF.
+      requestAnimationFrame(() => { view.focus(); view.print(); });
+      setTimeout(cleanup, 180000);
+    }, { once: true });
+    frame.srcdoc = markup;
+    document.body.append(frame);
+  }
+
   const bindings = new WeakMap();
   function bind(container, data = {}, onSelect) {
     if (!container?.addEventListener) return;
@@ -187,15 +265,16 @@
       if (focus) requestAnimationFrame(() => (container.isConnected ? container : document).querySelector('[data-cf-doc-select="' + key + '"]')?.focus());
     };
     container.addEventListener('click', event => {
-      const button = event.target.closest?.('[data-cf-doc-select], [data-cf-doc-download]');
+      const button = event.target.closest?.('[data-cf-doc-select], [data-cf-doc-download], [data-cf-doc-print]');
       if (!button || !container.contains(button)) return;
       if (button.dataset.cfDocSelect) { select(button.dataset.cfDocSelect, false); return; }
-      const definition = definitions.find(item => item.key === button.dataset.cfDocDownload);
+      const definition = definitions.find(item => item.key === (button.dataset.cfDocPrint || button.dataset.cfDocDownload));
       if (!definition || !isReady(data?.[definition.key])) return;
-      const blob = new Blob([data[definition.key].document], { type: 'text/markdown;charset=utf-8' });
+      if (button.dataset.cfDocPrint) { printDocument(data[definition.key], definition); return; }
+      const blob = new Blob([markdownExport(data[definition.key])], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob), anchor = document.createElement('a');
       anchor.href = url; anchor.download = 'clientflock-' + definition.file + '.md';
-      document.body.append(anchor); anchor.click(); anchor.remove();
+      container.append(anchor); anchor.click(); anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, { signal: controller.signal });
     container.addEventListener('keydown', event => {

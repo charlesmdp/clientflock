@@ -1,4 +1,6 @@
 import {handleContacts,publicContact} from './contacts.mjs';
+import {billingApi,requirePaidAccess} from './billing.mjs';
+import {mailboxApi} from './mailbox.mjs';
 import {QUALIFICATION_VERSION,detectPlatform,unavailablePlatform,requiredPlatforms,requiresRequalification,platformMatchesRequirements,shopifyDependency} from './platform.mjs';
 const DAY=86400000;
 const CACHE_VERSION='v3-platform-fit';
@@ -242,6 +244,7 @@ async function nextBatch(request,env,parent){
  if(page>3)return json({error:'You have explored all nine customers available in this research.'},409);
  if(!['mission','market','idealClients'].every(key=>typeof previous[key]?.document==='string'&&previous[key].document.trim())||!previous.understanding?.profile)return json({error:'This saved research needs a complete business playbook before finding more customers.'},409);
  const rootId=previous.pagination?.rootId||parent.id,cacheKey=await hash(CACHE_VERSION+':next:'+rootId+':'+page);
+ const denied=await requirePaidAccess(request,env,rootId);if(denied)return denied;
  let next=await env.DB.prepare('SELECT * FROM searches WHERE cache_key=?').bind(cacheKey).first();
  if(next&&next.expires_at>Date.now())return json({...view(next),cached:next.status==='complete',joined:next.status==='working'});
  // Reserve the parent before charging a start budget. Repeated clicks share one next batch.
@@ -265,6 +268,8 @@ async function nextBatch(request,env,parent){
  }finally{await env.DB.prepare('UPDATE searches SET lease=NULL,lease_until=0 WHERE id=? AND lease=?').bind(parent.id,lease).run();}
 }
 export async function api(request,env){
+ const billing=await billingApi(request,env);if(billing)return billing;
+ const mailbox=await mailboxApi(request,env);if(mailbox)return mailbox;
  const url=new URL(request.url);if(!url.pathname.startsWith('/api/'))return null;
  if(url.pathname==='/api/health')return json({ready:!!(env.DB&&configured(env)),storage:!!env.DB,research:configured(env),contacts:!!(env.DB&&env.ICYPEAS_API_KEY)});
  if(!env.DB||!configured(env))return json({error:'Live research is being connected. The Cloudflare OpenAI secret is not configured yet. No search has been charged.'},503);
@@ -282,6 +287,8 @@ export async function api(request,env){
   }
   const match=url.pathname.match(/^\/api\/search\/([a-f0-9-]{36})(?:\/(advance|retry|contacts|requalify|more))?$/);if(!match)return json({error:'Not found.'},404);
   let row=await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(match[1]).first();if(!row||row.expires_at<Date.now())return json({error:'This search has expired. Start a new search.'},404);
+  const accessData=JSON.parse(row.data);
+  if(Number(accessData.pagination?.page)>1){const denied=await requirePaidAccess(request,env,accessData.pagination.rootId);if(denied)return denied;}
   if(request.method==='GET'&&!match[2])return json(view(row));
   if(request.method==='POST'&&match[2]==='more')return await nextBatch(request,env,row);
   if(request.method==='POST'&&match[2]==='requalify'){

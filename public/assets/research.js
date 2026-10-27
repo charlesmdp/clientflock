@@ -24,6 +24,7 @@
     mail: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/></svg>',
     arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
     lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/></svg>',
+    globe: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18Z"/></svg>',
     spark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg>'
   };
 
@@ -52,12 +53,11 @@
   }
   function composeUrl(contact, index) {
     const draft = emailDraft(index);
-    return 'mailto:' + encodeURIComponent(String(contact.email)) + '?subject=' + encodeURIComponent(draft.subject) + '&body=' + encodeURIComponent(draft.body);
+    return 'mailto:' + encodeURIComponent(String(contact?.email || '')) + '?subject=' + encodeURIComponent(draft.subject) + '&body=' + encodeURIComponent(draft.body);
   }
   function updateComposeLinks(index) {
     const contact = contactState[index] || job?.data?.contacts?.[index];
-    if (!contact?.email) return;
-    [modal, detail].forEach(container => container.querySelectorAll('[data-compose="' + index + '"]').forEach(link => { link.href = composeUrl(contact, index); }));
+    [modal, detail].forEach(container => container.querySelectorAll('[data-compose="' + index + '"],[data-open-email="' + index + '"]').forEach(link => { link.href = composeUrl(contact, index); }));
   }
   function removeEffects() {
     effectTimers.forEach(clearTimeout); effectTimers.clear();
@@ -242,10 +242,19 @@
     return '<section class="rf-loading" aria-label="Customer research in progress"><div class="rf-loading-art" aria-hidden="true"><img class="rf-loading-frame is-visible" src="/assets/swan.svg" alt="" decoding="async"><img class="rf-loading-frame rf-loading-next" alt="" decoding="async"></div><h1>Finding your next customers.</h1><p class="rf-loading-stage" role="status" aria-live="polite">' + (job ? phaseCopy[stage] : 'Opening your research.') + '</p><div class="rf-loading-progress"><span class="rf-rainbow-ribbon" aria-hidden="true"><i></i></span><div class="rf-progress-labels"><strong data-progress-percent>' + estimate.percent + '%</strong><span data-progress-time title="Approximate time, based on the remaining research steps. It may vary as websites are checked.">' + estimate.remaining + '</span></div><progress class="rf-visually-hidden" max="100" value="' + estimate.percent + '" aria-label="Research progress"></progress></div><div class="rf-loading-docs" data-ready="' + readyDocs() + '">' + documentRows() + '</div></section>';
   }
 
+  const emailApps = [
+    ['Gmail', 'gmail.com'], ['Outlook', 'outlook.com'], ['Apple Mail', 'icloud.com'],
+    ['Spark', 'sparkmailapp.com'], ['Thunderbird', 'thunderbird.net'], ['Yahoo Mail', 'mail.yahoo.com'],
+    ['Proton Mail', 'proton.me'], ['Fastmail', 'fastmail.com'], ['Zoho Mail', 'zoho.com'], ['Superhuman', 'superhuman.com']
+  ];
+  const faviconUrl = website => 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(domain(website)) + '&sz=64';
+  function compatibleApps() {
+    return '<aside class="rf-compatible" aria-label="Your drafts work with your email app"><span>Compatible with</span><div class="rf-email-apps">' + emailApps.map(([name, host]) => '<span class="rf-email-app" title="' + name + '" aria-label="' + name + '"><span class="rf-app-fallback" aria-hidden="true">' + icons.mail + '</span><img src="' + esc(faviconUrl('https://' + host)) + '" alt="" loading="lazy" referrerpolicy="no-referrer"></span>').join('') + '<small>…and more</small></div><p>Copy your draft into the app you love.</p></aside>';
+  }
   function completeHero() {
     if (needsRecheck()) return '<section class="rf-complete-hero rf-complete-review"><div><h1>Your saved research.</h1><p>One more check before you reach out.</p></div></section>';
     const count = job?.data?.leads?.length || 0;
-    return '<section class="rf-complete-hero">' + (job?.data?.pagination?.previousId ? '<button class="rf-previous" data-previous>← Previous 3 customers</button>' : '') + '<div><h1>' + count + ' potential customer' + (count === 1 ? '' : 's') + '.</h1><p>A reason to reach out. A personal first email.</p></div></section>';
+    return '<section class="rf-complete-hero">' + (job?.data?.pagination?.previousId ? '<button class="rf-previous" data-previous>← Previous 3 customers</button>' : '') + '<div class="rf-complete-heading"><h1>' + count + ' potential customer' + (count === 1 ? '' : 's') + '.</h1><p>A reason to reach out. A personal first email.</p></div>' + compatibleApps() + '</section>';
   }
 
   function paused() {
@@ -277,22 +286,25 @@
     return '<div class="rf-company-website-row">' + (url !== '#' ? '<a class="rf-company-website" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(domain(url)) + '<span aria-hidden="true"> ↗</span></a>' : '<span class="rf-company-website">Website unavailable</span>') + '<span class="rf-website-state">' + esc(label) + '</span></div>' + platformMarkup(lead, index);
   }
 
-  const logo = lead => '<span class="rf-company-logo"><span>' + esc((lead.name || '?').slice(0, 1)) + '</span>' + (safeUrl(lead.website) !== '#' ? '<img src="' + esc(new URL('/favicon.ico', lead.website).href) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span>';
+  const logo = lead => '<span class="rf-company-logo" aria-label="' + esc(lead.name || 'Company') + ' website icon"><span>' + icons.globe + '</span>' + (safeUrl(lead.website) !== '#' ? '<img src="' + esc(faviconUrl(lead.website)) + '" data-favicon-fallback="' + esc(new URL('/favicon.ico', lead.website).href) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span>';
   function results() {
     if (needsRecheck()) return recheckNotice();
     const leads = job?.data?.leads || [];
     if (!leads.length) return '<p>Your shortlist is being prepared.</p>';
     const canFindMore = Number(job?.data?.pagination?.page || 1) < 3;
-    const locked = '<div class="rf-more-preview"><div class="rf-locked-rows" aria-label="Preview of the next shortlist">' + [1, 2].map((number) => '<div class="rf-locked-row"><div class="rf-locked-profile" aria-hidden="true"><span class="rf-blur-logo"></span><span class="rf-locked-lines"><i></i><i></i></span></div><div class="rf-locked-actions"><button class="rf-locked-detail" data-more aria-label="Unlock the next customer details">' + icons.lock + '<span>Unlock</span></button><button class="rf-locked-email" data-more aria-label="Unlock the next customer email">' + icons.lock + '<span>Unlock</span></button></div></div>').join('') + '</div><div class="rf-next-action"><button class="rf-unlock" data-more data-focus="more-preview">' + icons.spark + ' Find the next ones</button><small>Unlock a fresh shortlist. We’ll research 3 new companies.</small></div></div>';
+    const locked = '<div class="rf-more-preview"><div class="rf-locked-rows" aria-label="Preview of the next shortlist">' + [1, 2].map((number) => '<div class="rf-locked-row"><div class="rf-locked-profile" aria-hidden="true"><span class="rf-blur-logo"></span><span class="rf-locked-lines"><i></i><i></i></span></div><div class="rf-locked-actions"><button class="rf-locked-email" data-more aria-label="Unlock the next customers">' + icons.lock + '<span>Unlock</span></button></div></div>').join('') + '</div><div class="rf-next-action"><button class="rf-unlock" data-more data-focus="more-preview">' + icons.spark + ' Find the next ones</button><small>Unlock a fresh shortlist. We’ll research 3 new companies.</small></div></div>';
     return '<section class="rf-shortlist" aria-label="Companies and people to contact"><header class="rf-shortlist-header"><span class="rf-section-icon">' + icons.mail + '</span><h2>People to contact</h2><span class="rf-ready-count">' + leads.length + ' ready</span></header><div class="rf-results">' + leads.map(customerRow).join('') + '</div>' + (canFindMore ? locked : '<p class="rf-shortlist-end">You’ve reached the end of this research. Your earlier shortlists are saved above.</p>') + '</section>';
+  }
+  function emailUnlock(contact, index, className) {
+    const retryable = ['auth_configuration', 'people_response', 'people_no_match', 'daily_limit'].includes(contact?.errorCode) && contact?.retryable === true;
+    const wait = retryable && (contact.retryAt || 0) > Date.now();
+    return '<button class="' + className + '" ' + (retryable ? 'data-contact-retry' : 'data-contact') + '="' + index + '"' + (wait ? ' disabled' : '') + '>' + icons.lock + '<span>Unlock email address <b>for free</b></span></button>';
   }
   function rowContactMarkup(contact, lead, index) {
     if (contact?.email) return '<a class="rf-row-address" data-compose="' + index + '" href="' + esc(composeUrl(contact, index)) + '">' + esc(contact.email) + '</a><span class="rf-row-address-state">' + (validFoundEmail(contact) ? '✓ Verified' : 'Review before using') + '</span>';
     if (contact?.status === 'working') return contactRunning.has(index) ? '<span class="rf-contact-working" role="status"><i></i> Finding their email…</span>' : '<button class="rf-row-unlock" data-contact="' + index + '">' + icons.lock + ' Continue email search</button>';
-    const retryable = ['auth_configuration', 'people_response', 'people_no_match', 'daily_limit'].includes(contact?.errorCode) && contact?.retryable === true;
-    if (contact && ['not_found', 'error', 'unknown', 'unavailable', 'risky', 'skipped'].includes(contact.status)) return '<span class="rf-row-contact-note">Email not found yet</span><button class="rf-row-unlock" data-email="' + index + '">' + (retryable ? 'Explore another route' : 'View contact options') + '</button>';
-    if (!healthChecked) return '<span class="rf-row-contact-note">Checking email search…</span>';
-    return contactAvailable ? '<button class="rf-row-unlock" data-contact="' + index + '">' + icons.lock + ' Unlock email</button><span class="rf-row-contact-note">Find & verify</span>' : '<a class="rf-row-unlock" href="' + esc(safeUrl(lead.contactUrl || lead.website)) + '" target="_blank" rel="noopener noreferrer">Company contact page ↗</a>';
+    const message = contact?.status === 'unavailable' || contact?.errorCode === 'auth_configuration' ? 'Email search needs to be connected.' : contact && ['not_found', 'error', 'unknown', 'risky', 'skipped'].includes(contact.status) ? 'No verified address yet. Open the draft for details.' : '';
+    return emailUnlock(contact, index, 'rf-row-unlock') + (message ? '<span class="rf-row-contact-note">' + message + '</span>' : '');
   }
   function customerRow(lead, index) {
     const contact = contactState[index] || job?.data?.contacts?.[index];
@@ -304,7 +316,7 @@
   }
   function customerEmail(lead, index) {
     const contact = contactState[index] || job?.data?.contacts?.[index], draft = emailDraft(index);
-    return '<section class="rf-email-card" data-customer="' + index + '" aria-label="Email draft for ' + esc(lead.name) + '"><div class="rf-email-paper"><div class="rf-to-row"><span>To</span><strong data-person-name="' + index + '">' + esc((contact?.contactKind === 'company_mailbox' ? 'Company team' : contact?.person?.name || contact?.person?.fullName || lead.roleToContact)) + '</strong></div><div class="rf-contact-slot" data-contact-slot="' + index + '">' + contactMarkup(contact, lead, index) + '</div><div class="rf-draft-heading"><span>Edit your draft</span><small data-draft-save>Change the subject or message below</small></div><label class="rf-draft-field"><span>Subject</span><input data-draft-field="subject" data-draft-index="' + index + '" maxlength="200" value="' + esc(draft.subject) + '" autocomplete="off"></label><label class="rf-draft-field rf-draft-message"><span>Message</span><textarea data-draft-field="body" data-draft-index="' + index + '" rows="8" maxlength="20000">' + esc(draft.body) + '</textarea></label><div class="rf-email-footer"><button class="research-button" data-copy="' + index + '">Copy email <span>↗</span></button><button class="rf-text-button" data-lead="' + index + '">Why this company?</button></div><p class="rf-draft-note">Edit anything above. Your changes stay in this browser. Nothing is sent automatically.</p></div></section>';
+    return '<section class="rf-email-card" data-customer="' + index + '" aria-label="Email draft for ' + esc(lead.name) + '"><div class="rf-email-paper"><div class="rf-to-row"><span>To</span><strong data-person-name="' + index + '">' + esc((contact?.contactKind === 'company_mailbox' ? 'Company team' : contact?.person?.name || contact?.person?.fullName || lead.roleToContact)) + '</strong></div><div class="rf-contact-slot" data-contact-slot="' + index + '">' + contactMarkup(contact, lead, index) + '</div><div class="rf-draft-heading"><span>Edit your draft</span><small data-draft-save>Change the subject or message below</small></div><label class="rf-draft-field"><span>Subject</span><input data-draft-field="subject" data-draft-index="' + index + '" maxlength="200" value="' + esc(draft.subject) + '" autocomplete="off"></label><label class="rf-draft-field rf-draft-message"><span>Message</span><textarea data-draft-field="body" data-draft-index="' + index + '" rows="8" maxlength="20000">' + esc(draft.body) + '</textarea></label><div class="rf-email-footer rf-send-options"><button class="research-button rf-copy-send" data-copy="' + index + '">' + icons.mail + ' Copy and send email myself</button><p class="rf-send-guidance">Start small. We recommend a maximum of 3 thoughtful emails a day.</p><div class="rf-copy-feedback" data-copy-feedback role="status" hidden><span data-copy-message></span><a data-open-email="' + index + '" href="' + esc(composeUrl(contact, index)) + '">Open my email app ↗</a></div><div class="rf-connected-send"><div><button type="button" disabled aria-describedby="rf-send-capacity">Send it with ClientFlock</button><small id="rf-send-capacity">At capacity for now. Coming back soon.</small></div><button type="button" data-send-mcp="' + index + '">Send it with our MCP ' + icons.arrow + '</button></div></div><p class="rf-draft-note">Your changes stay in this browser. You review every email before sending.</p></div></section>';
   }
   function openDetail(view, trigger) {
     detailView = view; if (!detail.open) detailOpener = trigger || document.activeElement;
@@ -347,13 +359,10 @@
     }
     const busy = contactRunning.has(index);
     if (contact?.status === 'working') return '<span class="rf-contact-working" role="status"><i></i> ' + (busy ? esc(contact.message || 'Finding and checking their email…') : 'Your email search is saved.') + '</span>' + (!busy ? '<button class="rf-find-contact" data-contact="' + index + '">Continue email search ↗</button>' : '');
-    if (contact && ['not_found', 'error', 'unknown', 'unavailable', 'risky', 'skipped'].includes(contact.status)) {
-      const retryable = ['auth_configuration', 'people_response', 'people_no_match', 'daily_limit'].includes(contact.errorCode) && contact.retryable === true;
-      const newLookup = retryable && contact.requiresNewLookup === true;
-      const wait = Math.max(0, Math.ceil(((contact.retryAt || 0) - Date.now()) / 1000));
-      return '<span class="rf-contact-empty">' + esc(contact.message || 'No verified email found for this company.') + '</span>' + (retryable ? (newLookup ? '<small class="rf-contact-credit-note">This runs a new Icypeas lookup and may use credits.</small>' : contact.errorCode === 'people_response' ? '<small class="rf-contact-credit-note">Retry checks the saved response without a new lookup.</small>' : '') + '<button class="rf-find-contact" data-contact-retry="' + index + '"' + (wait ? ' disabled' : '') + '>' + (contact.errorCode === 'daily_limit' ? 'Resume contact search' : contact.errorCode === 'people_no_match' ? 'Search more broadly' : contact.errorCode === 'people_response' ? 'Retry contact search' : 'Retry email search') + ' ↗</button>' + (wait ? '<small class="rf-contact-cooldown" role="status">' + (wait >= 3600 ? 'Daily limit reached. Try again tomorrow.' : 'Try again in ' + wait + ' seconds.') + '</small>' : '') : '') + '<a class="rf-company-contact" href="' + esc(safeUrl(lead.contactUrl || lead.website)) + '" target="_blank" rel="noopener noreferrer">Company contact page ↗</a>';
-    }
-    return '<span class="rf-contact-empty">Email address not researched yet.</span>' + (contactAvailable ? '<button class="rf-find-contact" data-contact="' + index + '">Unlock email ↗</button>' : '<a class="rf-company-contact" href="' + esc(safeUrl(lead.contactUrl || lead.website)) + '" target="_blank" rel="noopener noreferrer">Company contact page ↗</a>');
+    const retryable = ['auth_configuration', 'people_response', 'people_no_match', 'daily_limit'].includes(contact?.errorCode) && contact?.retryable === true;
+    const wait = retryable ? Math.max(0, Math.ceil(((contact.retryAt || 0) - Date.now()) / 1000)) : 0;
+    const state = contact?.message || (contact ? 'We haven’t found a verified address for this company yet.' : 'Find the right person and check their email address.');
+    return '<div class="rf-unlock-contact">' + emailUnlock(contact, index, 'rf-find-contact') + '<span class="rf-contact-empty">' + esc(state) + '</span>' + (retryable && contact.requiresNewLookup === true ? '<small class="rf-contact-credit-note">We’ll try a broader lookup. This may use the site’s Icypeas credits.</small>' : '') + (wait ? '<small class="rf-contact-cooldown" role="status">' + (wait >= 3600 ? 'Daily limit reached. Try again tomorrow.' : 'Try again in ' + wait + ' seconds.') + '</small>' : '') + '</div>';
   }
 
   function bindContactButtons(container = detail) {
@@ -383,6 +392,7 @@
         slot.innerHTML = contactMarkup(contact, lead, i); bindContactButtons(slot);
         if (hadFocus) slot.querySelector('button:not(:disabled), a')?.focus({ preventScroll: true });
       }
+      updateComposeLinks(i);
       const remaining = (contact?.retryAt || 0) - Date.now();
       if (remaining > 0) contactTimers.set(i, setTimeout(() => refreshContact(i), remaining + 50));
     });
@@ -398,22 +408,44 @@
     container.querySelectorAll('[data-lead]').forEach(button => button.onclick = () => openDetail({ kind: 'lead', index: Number(button.dataset.lead) }, button));
     container.querySelectorAll('[data-email]').forEach(button => button.onclick = () => openDetail({ kind: 'email', index: Number(button.dataset.email) }, button));
     container.querySelectorAll('[data-copy]').forEach(button => button.onclick = async () => {
-      const draft = emailDraft(Number(button.dataset.copy));
-      try { await navigator.clipboard.writeText('Subject: ' + draft.subject + '\n\n' + draft.body); button.textContent = 'Copied ✓'; setTimeout(() => { if (button.isConnected) button.innerHTML = 'Copy email <span>↗</span>'; }, 2500); }
-      catch { button.textContent = 'Select the text to copy'; }
+      const index = Number(button.dataset.copy), draft = emailDraft(index), feedback = container.querySelector('[data-copy-feedback]');
+      const contact = contactState[index] || job?.data?.contacts?.[index];
+      const link = feedback?.querySelector('[data-open-email]'); if (link) link.href = composeUrl(contact, index);
+      try {
+        await navigator.clipboard.writeText('Subject: ' + draft.subject + '\n\n' + draft.body);
+        button.textContent = 'Copied ✓';
+        if (feedback) { feedback.hidden = false; feedback.querySelector('[data-copy-message]').textContent = 'Paste it into your email app, or open a ready-to-edit draft.'; }
+        setTimeout(() => { if (button.isConnected) button.innerHTML = icons.mail + ' Copy and send email myself'; }, 2500);
+      } catch {
+        if (feedback) { feedback.hidden = false; feedback.querySelector('[data-copy-message]').textContent = 'Clipboard access is unavailable. You can open the draft in your email app instead.'; }
+      }
+    });
+    container.querySelectorAll('[data-send-mcp]').forEach(button => button.onclick = () => {
+      const index = Number(button.dataset.sendMcp), draft = emailDraft(index), contact = contactState[index] || job?.data?.contacts?.[index];
+      if (window.ClientFlockMail?.open) window.ClientFlockMail.open({ jobId: job.id, leadIndex: index, recipient: contact?.email || '', subject: draft.subject, body: draft.body, company: job.data.leads[index].name });
+      else { const note = container.querySelector('.rf-draft-note'); if (note) note.textContent = 'The email connection is not available yet. Copy the draft to your email app in the meantime.'; }
     });
     container.querySelectorAll('[data-draft-field]').forEach(field => {
       const fit = () => { if (field.tagName === 'TEXTAREA') { field.style.height = 'auto'; field.style.height = Math.max(190, field.scrollHeight) + 'px'; } };
       field.addEventListener('input', () => { saveDraft(Number(field.dataset.draftIndex), field.dataset.draftField, field.value); fit(); });
       requestAnimationFrame(fit);
     });
-    container.querySelectorAll('[data-more]').forEach(button => button.onclick = () => openDetail({ kind: 'more' }, button));
+    container.querySelectorAll('[data-more]').forEach(button => button.onclick = () => {
+      const id = job?.id, run = generation;
+      if (window.ClientFlockCheckout?.open) window.ClientFlockCheckout.open({ jobId: id, onUnlocked: () => { if (run === generation && job?.id === id && modal.open) openDetail({ kind: 'more' }, button); } });
+      else notice('Checkout is not available yet. Please try again shortly.');
+    });
     container.querySelector('[data-find-more]')?.addEventListener('click', findMore);
     bindDocumentButtons(container); bindContactButtons(container);
   }
   function bind() {
     modal.querySelector('.research-close').onclick = () => modal.close();
-    modal.querySelectorAll('.rf-company-logo img').forEach(image => { image.addEventListener('error', () => image.remove()); image.addEventListener('load', () => image.parentElement.classList.add('has-logo')); if (image.complete && image.naturalWidth) image.parentElement.classList.add('has-logo'); });
+    modal.querySelectorAll('.rf-company-logo img,.rf-email-app img').forEach(image => {
+      const failed = () => { if (image.dataset.faviconFallback) { const fallback = image.dataset.faviconFallback; delete image.dataset.faviconFallback; image.src = fallback; } else image.remove(); };
+      image.addEventListener('error', failed);
+      image.addEventListener('load', () => image.parentElement.classList.add('has-logo'));
+      if (image.complete) { if (image.naturalWidth) image.parentElement.classList.add('has-logo'); else failed(); }
+    });
     modal.querySelector('[data-retry]')?.addEventListener('click', async event => { const run = generation, id = job.id, button = event.currentTarget; button.disabled = true; try { const next = await request('/api/search/' + id + '/retry', {}); if (run !== generation) return; job = next; alertMessage = ''; render(); loop(); } catch (error) { if (run === generation) notice(error.message); } finally { if (run === generation && button.isConnected) button.disabled = false; } });
     modal.querySelector('[data-restart]')?.addEventListener('click', () => { if (lastInput) window.ClientFlockResearch.start(lastInput); else if (lastResumeId) window.ClientFlockResearch.resume(lastResumeId); else modal.close(); });
     modal.querySelector('[data-requalify]')?.addEventListener('click', requalify);

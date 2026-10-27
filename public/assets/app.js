@@ -70,54 +70,60 @@
     const scenario=scenarios[activeScenario],list=$('#prospect-list');if(!list)return;
     samples=scenario.leads;
     $('#scenario-panel').setAttribute('aria-labelledby','tab-'+activeScenario);
-    $$('[data-scenario]').forEach(tab=>{const selected=tab.dataset.scenario===activeScenario;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});
-    list.innerHTML=samples.map((s,i)=>'<article class="lead-card"><div class="lead-head">'+brandLogo(s,'lead-logo')+'<div class="lead-info"><h4><button class="lead-details" data-action="detail" data-sample="'+i+'" aria-label="View '+escape(s.name)+'">'+escape(s.name)+'</button></h4><p class="lead-meta">'+escape(s.type)+'</p><p class="lead-contact">Contact: <strong>'+escape(s.contact)+'</strong> · '+escape(s.role)+'</p></div><button class="lead-email" data-action="demo" data-sample="'+i+'" aria-label="Read email for '+escape(s.name)+'">'+plane+'See email</button></div><dl class="lead-reasons"><div><dt>Why reach out now</dt><dd>'+escape(s.whyNow)+'</dd></div><div><dt>What to offer</dt><dd>'+escape(s.sale)+'</dd></div></dl></article>').join('');
+    $$('[data-scenario]').forEach(tab=>{const selected=tab.dataset.scenario===activeScenario;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=tab.hasAttribute('data-scenario-clone')?-1:selected?0:-1;});
+    list.innerHTML=samples.map((s,i)=>'<article class="lead-card"><div class="lead-head">'+brandLogo(s,'lead-logo')+'<div class="lead-info"><h4><button class="lead-details" data-action="detail" data-sample="'+i+'" aria-label="View '+escape(s.name)+'">'+escape(s.name)+'</button></h4><p class="lead-meta">'+escape(s.type)+'</p><p class="lead-contact">Contact: <strong>'+escape(s.contact)+'</strong> · '+escape(s.role)+'</p></div><button class="lead-email" data-action="demo" data-sample="'+i+'" aria-label="Read email for '+escape(s.name)+'">'+plane+'See email</button></div><dl class="lead-reasons"><div><dt>Why reach out now</dt><dd>'+escape(s.whyNow)+'</dd></div><div><dt><span class="offer-badge">What to offer <span aria-hidden="true">✦</span></span></dt><dd>'+escape(s.sale)+'</dd></div></dl></article>').join('');
     if(animate){const scene=$('.scenario-scene');scene.classList.remove('is-changing');requestAnimationFrame(()=>{scene.classList.add('is-changing');clearTimeout(animationTimer);animationTimer=setTimeout(()=>scene.classList.remove('is-changing'),550);});}
   }
   const roleOrder=['pool','saas','lawyer','photobooth','fintech','webdesign','recruiting','catering','video','cybersecurity','cleaning'].filter(key=>scenarios[key]);
   const tablist=$('.scenario-tabs');
   if(!tablist)return;
-  tablist.innerHTML=roleOrder.map((key,index)=>'<button type="button" role="tab" id="tab-'+key+'" data-scenario="'+key+'" aria-controls="scenario-panel" aria-selected="'+(index===0)+'" tabindex="'+(index===0?'0':'-1')+'"><span class="profession-art"><img src="/assets/professions/'+key+'.webp" alt="" width="160" height="140" decoding="async" '+(index>2?'loading="lazy"':'')+'></span><span class="profession-label">'+escape(scenarios[key].label)+'</span></button>').join('');
-  const tabs=$$('[data-scenario]');
-  const pageCount=Math.ceil(tabs.length/3);
-  let page=0,manual=false;
-  const pager=document.createElement('div');
-  pager.className='profession-pages';pager.setAttribute('role','group');pager.setAttribute('aria-label','More example businesses');
-  pager.innerHTML=Array.from({length:pageCount},(_,index)=>'<button type="button" data-profession-page="'+index+'" aria-label="Show '+roleOrder.slice(index*3,index*3+3).map(key=>escape(scenarios[key].label)).join(', ')+'" aria-pressed="'+(index===0)+'"><span aria-hidden="true"></span></button>').join('');
-  tablist.after(pager);
-  function showPage(nextPage,select=true){
-    page=(nextPage+pageCount)%pageCount;
-    tablist.dataset.visibleCount=String(Math.min(3,tabs.length-page*3));
-    tabs.forEach((tab,index)=>{
-      const group=Math.floor(index/3);
-      tab.hidden=group!==page;tab.style.setProperty('--role-delay',((index%3)*65)+'ms');
-      if(group===page||group===(page+1)%pageCount)tab.querySelector('img').loading='eager';
-    });
-    $$('[data-profession-page]',pager).forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.professionPage)===page)));
-    if(select){activeScenario=tabs[page*3].dataset.scenario;renderCustomers(true);}
+  const professionButton=(key,index,clone=false)=>'<button type="button" '+(clone?'aria-hidden="true" data-scenario-clone':'role="tab" id="tab-'+key+'" aria-controls="scenario-panel"')+' data-scenario="'+key+'" aria-selected="'+(index===0)+'" tabindex="'+(!clone&&index===0?'0':'-1')+'"><span class="profession-art"><img src="/assets/professions/'+key+'.webp" alt="" width="160" height="140" decoding="async"></span><span class="profession-label">'+escape(scenarios[key].label)+'</span></button>';
+  tablist.innerHTML='<div class="profession-group" role="presentation">'+roleOrder.map((key,index)=>professionButton(key,index)).join('')+'</div><div class="profession-group profession-group-copy" role="presentation" aria-hidden="true">'+roleOrder.map((key,index)=>professionButton(key,index,true)).join('')+'</div>';
+  const viewport=document.createElement('div');
+  viewport.className='profession-marquee';
+  tablist.before(viewport);viewport.append(tablist);
+  const tabs=$$('[data-scenario]:not([data-scenario-clone])',tablist);
+  const groups=$$('.profession-group',tablist);
+  let position=0,lastWritten=0,lastTime=0,frame=0,visible=true,manualUntil=0;
+  const motion=matchMedia('(prefers-reduced-motion: reduce)');
+  const canMove=()=>visible&&!document.hidden&&!motion.matches&&!viewport.matches(':hover')&&!viewport.contains(document.activeElement)&&!document.querySelector('dialog[open]')&&Date.now()>manualUntil;
+  function keepInView(tab){
+    const bounds=viewport.getBoundingClientRect(),item=tab.getBoundingClientRect();
+    if(item.left<bounds.left+14||item.right>bounds.right-14){
+      viewport.scrollLeft+=item.left-bounds.left-(bounds.width-item.width)/2;
+      position=viewport.scrollLeft;lastWritten=position;
+    }
   }
-  tabs.forEach((tab,index)=>{
+  function drift(now){
+    const elapsed=lastTime?Math.min(now-lastTime,50):0;lastTime=now;
+    if(canMove()){
+      if(Math.abs(viewport.scrollLeft-lastWritten)>2)position=viewport.scrollLeft;
+      const loop=groups[1].offsetLeft-groups[0].offsetLeft;
+      if(loop>0){position=(position+elapsed*.018)%loop;viewport.scrollLeft=position;lastWritten=viewport.scrollLeft;}
+    }else{position=viewport.scrollLeft;lastWritten=position;}
+    frame=requestAnimationFrame(drift);
+  }
+  function resume(){if(!frame&&!document.hidden&&!motion.matches){lastTime=0;frame=requestAnimationFrame(drift);}}
+  function suspend(){cancelAnimationFrame(frame);frame=0;lastTime=0;}
+  $$('[data-scenario]',tablist).forEach(tab=>{
     tab.addEventListener('click',()=>{
-      manual=true;
       if(activeScenario!==tab.dataset.scenario){activeScenario=tab.dataset.scenario;renderCustomers(true);}
-      showPage(Math.floor(index/3),false);
     });
-    tab.addEventListener('keydown',event=>{
-      let next=index;
-      if(event.key==='ArrowRight')next=(index+1)%tabs.length;
-      else if(event.key==='ArrowLeft')next=(index-1+tabs.length)%tabs.length;
-      else if(event.key==='Home')next=0;
-      else if(event.key==='End')next=tabs.length-1;
-      else return;
-      event.preventDefault();manual=true;
-      showPage(Math.floor(next/3),false);
-      tabs[next].click();tabs[next].focus({preventScroll:true});
-    });
+    tab.addEventListener('focus',()=>keepInView(tab));
   });
-  $$('[data-profession-page]',pager).forEach(button=>button.addEventListener('click',()=>{manual=true;showPage(Number(button.dataset.professionPage));}));
-  const preview=$('.lead-preview');
-  setInterval(()=>{
-    if(!manual&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&!preview.matches(':hover')&&!preview.contains(document.activeElement)&&!document.querySelector('dialog[open]'))showPage(page+1);
-  },8000);
-  showPage(0,false);renderCustomers();
+  tabs.forEach((tab,index)=>tab.addEventListener('keydown',event=>{
+    let next=index;
+    if(event.key==='ArrowRight')next=(index+1)%tabs.length;
+    else if(event.key==='ArrowLeft')next=(index-1+tabs.length)%tabs.length;
+    else if(event.key==='Home')next=0;
+    else if(event.key==='End')next=tabs.length-1;
+    else return;
+    event.preventDefault();tabs[next].click();tabs[next].focus({preventScroll:true});keepInView(tabs[next]);
+  }));
+  viewport.addEventListener('touchstart',()=>{manualUntil=Date.now()+5000;},{passive:true});
+  viewport.addEventListener('wheel',()=>{manualUntil=Date.now()+3000;},{passive:true});
+  document.addEventListener('visibilitychange',()=>document.hidden?suspend():resume());
+  if('IntersectionObserver' in window)new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)resume();else suspend();},{rootMargin:'100px'}).observe(viewport);
+  motion.addEventListener('change',()=>{if(motion.matches){suspend();viewport.scrollLeft=0;}else resume();});
+  renderCustomers();if(!motion.matches)resume();
 })();

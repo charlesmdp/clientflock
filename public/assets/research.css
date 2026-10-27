@@ -566,3 +566,85 @@
   .rf-rainbow-ribbon::before,.rf-wing-left,.rf-wing-right { animation:none!important; transition:none!important; }
   .research-detail,.research-detail * { animation:none!important; transition:none!important; }
 }
+
+/* Clear choices: unlock the address, understand the fit, then edit the draft. */
+.rf-main-results { max-width:1120px; }
+.rf-complete-hero { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px 28px; }
+.rf-complete-hero > .rf-previous { flex-basis:100%; }
+.rf-complete-heading { min-width:0; }
+.rf-compatible { max-width:310px; margin-left:auto; text-align:right; }
+.rf-compatible > span { display:block; margin-bottom:9px; color:#6d6670; font-size:10px; font-weight:600; }
+.rf-email-apps { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:6px; }
+.rf-email-app { position:relative; display:grid; place-items:center; width:22px; height:24px; }
+.rf-email-app img { position:absolute; width:18px; height:18px; object-fit:contain; }
+.rf-app-fallback { color:#a5a0a4; }
+.rf-app-fallback svg { display:block; width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.4; }
+.rf-email-app.has-logo .rf-app-fallback { visibility:hidden; }
+.rf-email-apps > small { font-size:9px; color:#6e6670; margin-left:2px; }
+.rf-compatible > p { margin:8px 0 0; font-size:9px; line-height:1.5; color:#91868e; }
+.rf-company-logo > span > svg { display:block; width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.4; }
+.rf-company-logo img { filter:none; opacity:1; }
+.rf-row-contact { gap:6px; }
+.rf-row-unlock,.research-detail .rf-find-contact { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:35px; margin:0; padding:8px 11px; border:1px solid #222; border-radius:8px; color:#fff; background:#222; font:500 11px/1.45 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; text-decoration:none; text-align:left; box-shadow:0 2px 3px #0000000a; }
+.rf-row-unlock b,.rf-find-contact b { font-weight:500; color:#e4d3ec; white-space:nowrap; }
+.rf-row-unlock:hover,.research-detail .rf-find-contact:hover { background:#3a3039; border-color:#3a3039; color:#fff; }
+.rf-row-unlock:disabled,.research-detail .rf-find-contact:disabled { opacity:.55; cursor:wait; }
+.rf-row-unlock svg,.rf-find-contact svg { width:14px; height:14px; flex:0 0 auto; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.rf-row-contact-note { width:100%; max-width:340px; color:#877680; font-size:10px; line-height:1.5; }
+.rf-row-actions .rf-row-view { padding:11px 14px; border-color:#e1dce1; background:#fff; }
+.rf-row-view .rainbow-word { font-size:13px; font-weight:750; letter-spacing:0; white-space:nowrap; }
+.rf-row-view .rainbow-word span:nth-child(6n+1) { color:#23769f; }
+.rf-row-view .rainbow-word span:nth-child(6n+2) { color:#47772d; }
+.rf-row-view .rainbow-word span:nth-child(6n+3) { color:#93640d; }
+.rf-row-view .rainbow-word span:nth-child(6n+4) { color:#b34654; }
+.rf-row-view .rainbow-word span:nth-child(6n+5) { color:#5267a6; }
+.rf-row-view .rainbow-word span:nth-child(6n+6) { color:#8253a5; }
+.rf-row-view:hover .rainbow-word { filter:none; }
+.rf-row-actions .rf-row-email { color:#3d333b; background:#fff; border-color:#e1dce1; }
+.rf-row-actions .rf-row-email:hover { background:#f6f2f5; }
+.rf-locked-actions .rf-locked-email { padding-inline:18px; min-height:36px; font-size:11px; }
+.rf-unlock-contact { display:flex; align-items:flex-start; flex-direction:column; gap:10px; }
+.research-detail .rf-unlock-contact .rf-find-contact { min-height:43px; padding:11px 15px; font-size:13px; }
+.research-detail .rf-unlock-contact .rf-contact-empty { margin:0; color:#8a7d86; font-size:12px; line-height:1.65; }
+.research-detail .rf-email-footer.rf-send-options { display:flex; flex-direction:column; align-items:stretch; gap:0; padding-top:6px; }
+.rf-copy-send { width:100%; justify-content:center; min-height:45px; font-size:13px; }
+.rf-send-guidance { margin:9px 0 18px; text-align:center; font-size:10px; line-height:1.6; color:#8e808a; }
+.rf-copy-feedback { display:flex; align-items:flex-start; gap:7px; flex-direction:column; padding:12px 14px; margin:0 0 18px; border:1px solid #e9dfeb; border-radius:10px; background:#fcf8fd; color:#706274; font-size:11px; line-height:1.6; }
+.rf-copy-feedback[hidden] { display:none; }
+.rf-copy-feedback a { color:#4e345a; font-weight:600; text-underline-offset:3px; }
+.rf-connected-send { display:grid; grid-template-columns:1fr 1fr; gap:11px; align-items:start; }
+.rf-connected-send button { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; min-height:43px; padding:11px 12px; border:1px solid #ddd4df; border-radius:9px; background:#fff; color:#514254; font:500 11px/1.4 Inter,sans-serif; }
+.rf-connected-send button:hover:not(:disabled) { background:#fcf6ff; border-color:#bea9c4; }
+.rf-connected-send button:disabled { color:#aaa2aa; border-color:#eee9ee; background:#f4f1f4; cursor:not-allowed; }
+.rf-connected-send button svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6; }
+.rf-connected-send small { display:block; padding:7px 4px 0; color:#a0939c; font-size:9px; line-height:1.5; text-align:center; }
+@media(max-width:900px) {
+  .rf-complete-hero { align-items:flex-start; }
+  .rf-compatible { max-width:none; margin:0; text-align:left; }
+  .rf-email-apps { justify-content:flex-start; }
+  .rf-complete-heading { flex-basis:100%; }
+  .rf-row-actions { flex-direction:column; align-items:stretch; }
+}
+@media(max-width:760px) {
+  .rf-row-actions { flex-direction:row; align-items:center; }
+  .rf-compatible { width:100%; }
+  .rf-compatible > p { display:none; }
+  .rf-complete-hero { gap:15px; }
+  .rf-email-apps { gap:7px; }
+}
+@media(max-width:600px) {
+  .rf-row-unlock { min-height:34px; font-size:10px; padding:8px 9px; }
+  .rf-row-view .rainbow-word { font-size:12px; }
+  .rf-row-actions .rf-row-view { padding:9px 10px; }
+  .rf-row-actions .rf-row-email { font-size:10px; padding:9px 10px; }
+  .rf-email-app { width:20px; height:23px; }
+  .rf-email-app img { width:17px; height:17px; }
+  .rf-email-apps { gap:5px; }
+  .rf-compatible > span { font-size:9px; margin-bottom:7px; }
+  .rf-email-apps > small { font-size:8px; }
+  .rf-row-contact-note { font-size:9px; }
+  .rf-send-guidance { font-size:10px; }
+  .rf-connected-send { grid-template-columns:1fr; gap:13px; }
+  .rf-connected-send button { min-height:42px; }
+  .rf-copy-send { font-size:11px; padding-inline:9px; }
+}

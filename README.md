@@ -2,17 +2,27 @@
 
 A Cloudflare Workers + D1 MVP: website or business description → mission → market research → ideal-client lists → 3 sourced companies → checked source quotes → short email drafts → separate factual review.
 
-One centered landing page at `/`. Legacy `/split.html` links redirect to it. Eleven illustrated profession examples rotate three at a time, with accessible pagination dots and no arrow or pause controls. Examples are clearly fictional; actual searches use the server pipeline.
+One centered landing page at `/`. Legacy `/split.html` links redirect to it. Eleven illustrated professions drift continuously in a slow marquee. Hover or focus pauses it; keyboard and reduced-motion users can navigate manually. There are no arrows, pause buttons or pagination dots. Examples are clearly fictional; actual searches use the server pipeline.
 
 ![Centered landing with profession illustrations](docs/landing-preview.jpg)
 
 ## Research interface
 
-A centered black swan changes between thirty playful illustrations with colorful props. An animated vivid pink, orange and violet progress bar shows the percentage of server research steps completed. Approximate remaining time adapts to observed stage durations; it is an estimate, not a completion promise. One short stage label explains the actual work. Transitions respect reduced-motion preferences. Three compact customer rows show email addresses or their unlock action directly. The letter-colored “Why contact them?” action opens the evidence and fit, while a separate editable email draft stays saved locally per search and company. Copy and mailto actions use the edited draft. A verified email newly found through a user-requested lookup triggers confetti; cached results do not. A flock takes flight on research completion, with reduced-motion support. Mission, Market and Ideal Customers stay visible underneath as clickable document rows with the original icons, highlights, full text, priority tables and sources. Blurred skeleton rows retain visible Unlock actions and one “Find the next ones” continuation button. They explicitly describe a new search, without inventing hidden prospects or implying they have already been found.
+A centered black swan changes between thirty playful illustrations with colorful props. An animated vivid pink, orange and violet progress bar shows the percentage of server research steps completed. Approximate remaining time adapts to observed stage durations; it is an estimate, not a completion promise. One short stage label explains the actual work. Transitions respect reduced-motion preferences. Three compact customer rows show email addresses or their unlock action directly. The letter-colored “Why contact them?” action opens the evidence and fit, while a separate editable email draft stays saved locally per search and company. Copy and mailto actions use the edited draft. A verified email newly found through a user-requested lookup triggers confetti; cached results do not. A flock takes flight on research completion, with reduced-motion support. Mission, Market and Ideal Customers stay visible underneath as clickable document rows with the original icons, full text, priority tables and sources. Summary highlight columns have been removed. Each document exports Markdown or a dedicated A4 print document for Save as PDF. Blurred skeleton rows retain visible Unlock actions and one “Find the next ones” continuation button. They explicitly describe a new search, without inventing hidden prospects or implying they have already been found.
 
 ![Research interface with fictional QA data](docs/research-preview.jpg)
 
 The screenshot uses fictional visual-test data. This fixture is not shipped or used for live research.
+
+## Payments and mailbox drafts
+
+- [Stripe setup entirely in the dashboards](docs/stripe-setup.md): public and secret keys, one-time price, signed webhook. One payment unlocks up to six more prospects for this research for 30 days, in the same browser. No amount is hardcoded. Unconfigured checkout remains disabled.
+- [Gmail, Outlook, daily drafts and MCP setup](docs/mailbox-setup.md): OAuth connection, encrypted refresh tokens, editable drafts and a maximum of three daily preparations. The final Send action stays in the user's email client. MCP is token-authenticated and requires a compatible client.
+- `server/billing.mjs` validates Stripe payment and browser ownership before granting access. Initial searches remain free; shared cache IDs do not grant another visitor paid access.
+- `server/mailbox.mjs` creates drafts only. The hourly Worker cron checks opted-in queues. No daily notification or automatic generation of new leads is implemented; the user reviews queued messages in Drafts.
+- Ten email-app logos, including Spark, describe copy/compose compatibility. Only Gmail and Outlook have the OAuth draft integration.
+
+The standalone Cloudflare config keeps dashboard runtime variables on redeploy. D1 creates payment/mailbox tables automatically on first use. Provider configuration and live integration checks are still required; no real Stripe payment or mailbox draft was created during development.
 
 ## Runtime
 
@@ -25,7 +35,7 @@ The screenshot uses fictional visual-test data. This fixture is not shipped or u
 - `worker/`: existing Sites-hosted Cloudflare runtime.
 - `cloudflare/`: standalone Worker entry and Wrangler configuration for your own Cloudflare account. No framework build needed for this entry.
 
-The model defaults to `gpt-6-luna`. Configure `OPENAI_MODEL` to change it. After a failed formatting or sourcing validation, a bounded repair uses `gpt-6.1-sol` (override with `OPENAI_FALLBACK_MODEL`). The search stops after at most 24 provider submissions. OpenAI web search discovers companies; bounded HTTP fetches check exact prospect quotes against source pages. Pages that cannot be checked cause an explicit pause. No paywall, no automatic email sending.
+The model defaults to `gpt-6-luna`. Configure `OPENAI_MODEL` to change it. After a failed formatting or sourcing validation, a bounded repair uses `gpt-6.1-sol` (override with `OPENAI_FALLBACK_MODEL`). The search stops after at most 24 provider submissions. OpenAI web search discovers companies; bounded HTTP fetches check exact prospect quotes against source pages. Pages that cannot be checked cause an explicit pause. The first shortlist and email lookups stay free. Extra shortlists use the optional Stripe checkout described below. No automatic email sending.
 
 ## Cloudflare deployment in your account
 
@@ -59,7 +69,7 @@ Docs: [Icypeas authentication and first request](https://api-doc.icypeas.com/get
 
 The input business website's written content determines report language. Country, market, domain suffix, source language and interface language do not override it. A business description uses its own language. The model must provide a short language-evidence quote that is checked against the description or a readable first-party page. Missing or uncheckable evidence falls back to English.
 
-All three reports retain their full Markdown document and add `presentation: {title, subtitle, highlights}` with three or four labeled highlights. The resolved language applies to headings, summaries, prospect snippets and email drafts. Exact source quotes, names and URLs remain unchanged. Missing metadata, wrong language codes and incorrect expected headings trigger bounded repair.
+All three reports retain their full Markdown document and stored `presentation: {title, subtitle, highlights}` metadata. The UI displays the title, subtitle and complete report, and intentionally omits the redundant highlight summaries. The resolved language applies to headings, summaries, prospect snippets and email drafts. Exact source quotes, names and URLs remain unchanged. Missing metadata, wrong language codes and incorrect expected headings trigger bounded repair.
 
 ## Platform qualification
 
@@ -73,7 +83,7 @@ Older cached searches expose a recheck action and withhold unqualified leads and
 
 Public website input is canonicalized to HTTPS hostname, stripping `www`, path and query. Cache version `v3-platform-fit`, TTL 7 days. Earlier results require requalification before their leads or emails can be shown or enriched. Simultaneous equivalent searches join one row through a unique key. Completed results cause no provider calls. Descriptions receive a private random cache key and cannot be looked up by submitting the same text. Search IDs are unguessable bearer capabilities: keep them private. The UI stores only the resume ID on the current browser. Stages advance while the research window is open; completed work persists when closed. OpenAI background calls already launched may finish after close.
 
-`POST /api/search/:id/more` reuses the completed understanding and three documents, starts at stage 4, and excludes all previous batch domains. The next batch has a deterministic cache key and is reused by repeated/concurrent requests. It carries `data.pagination: {page, previousId, rootId, maxPages:3}` so the UI can return to earlier results. Each new batch uses the normal research budget; a chain stops after nine companies. No paywall or automatic outreach is added.
+`POST /api/search/:id/more` reuses the completed understanding and three documents, starts at stage 4, and excludes all previous batch domains. The next batch has a deterministic cache key and is reused by repeated/concurrent requests. It carries `data.pagination: {page, previousId, rootId, maxPages:3}` so the UI can return to earlier results. Each new batch uses the normal research budget; a chain stops after nine companies. Paid access is checked before creating, advancing or reading later batches, including cached ones. No automatic outreach is added.
 
 D1 leases prevent simultaneous stage processing. The OpenAI research pipeline has a small crash window between creating a provider request and saving its ID; an interrupted submission can be retried and charged again. Search budget: 20 new jobs/day globally, 5/day per IP (user ID/local fallback), and 100 provider requests/day globally. Configure limits deliberately before public launch. These are count limits, not exact currency caps; set a provider spending budget too. Expired rows are replaced when searched again; no scheduled deletion is implemented yet.
 
@@ -83,7 +93,7 @@ D1 leases prevent simultaneous stage processing. The OpenAI research pipeline ha
 - Market figures are instructed to be sourced; figures are not independently recalculated. Documents distinguish hypotheses from observed facts.
 - Source pages are crawled first (official homepage fallback if necessary). The email stage selects an exact 6–25 word quote from the fetched text and drafts from it; the quote is matched against that text before the result is accepted. This confirms the quoted text, not the prospect's purchasing intent or every generated inference.
 - Emails are drafts: subject lowercase, <=6 words, no emoji; <=6 short sentences and a final question. A separate model pass checks the drafts against verified quotes and the offer; this is an additional guard, not a guarantee. Review before sending.
-- Icypeas is optional and no credential was added during development. Without it, results provide a company contact page and a suggested decision-maker role. With it, contacts come from provider-returned professional identities or exact first-party company evidence, with actual verification certainty and source links. No sending is implemented. Findymail and FullEnrich are not connected.
+- Icypeas is optional and no credential was added during development. Without it, the free email unlock remains visible and reports that the lookup service needs configuration; it does not pretend an address was found. With it, contacts come from provider-returned professional identities or exact first-party company evidence, with actual verification certainty and source links. No sending is implemented. Findymail and FullEnrich are not connected.
 - No browser-rendering fallback yet. Blocked or JavaScript-only source pages can pause the verification step. HTTP safety rejects non-public hostnames/IPs, non-HTTPS sources, credentials and custom ports and checks DNS for redirects; DNS rebinding remains a limitation of preflight DNS plus fetch and should be hardened before untrusted public deployment.
 - Origin checks and application rate budgets are included. The current managed Site remains owner-private. Before a public launch, add Cloudflare Turnstile/rate limiting and a retention policy.
 

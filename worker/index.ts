@@ -1,10 +1,14 @@
 import { api } from "../server/research.mjs";
+import { deliverDailyDrafts } from "../server/mailbox.mjs";
 import centered from "../content/index.html?raw";
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 
 const worker = {
+  async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    ctx.waitUntil(deliverDailyDrafts(env));
+  },
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
     const result = await api(request, env);
     if (result) return result;
