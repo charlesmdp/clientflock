@@ -2,11 +2,13 @@
 
 A Cloudflare Workers + D1 MVP: website or business description → mission → market research → ideal-client lists → 3 sourced companies → checked source quotes → short email drafts → separate factual review.
 
-Two landing layouts: `/` and `/split.html`. Eleven profession examples rotate three at a time. Examples are clearly fictional; actual searches use the server pipeline.
+One centered landing page at `/`. Legacy `/split.html` links redirect to it. Eleven illustrated profession examples rotate three at a time, with accessible pagination dots and no arrow or pause controls. Examples are clearly fictional; actual searches use the server pipeline.
+
+![Centered landing with profession illustrations](docs/landing-preview.jpg)
 
 ## Research interface
 
-A centered black swan changes between thirty playful illustrations with colorful props. An animated rainbow progress bar shows the percentage of server research steps completed. Approximate remaining time adapts to observed stage durations; it is an estimate, not a completion promise. One short stage label explains the actual work. Transitions respect reduced-motion preferences. Three compact customer rows open separate detail and email-draft dialogs. Mission, Market and Ideal Customers stay visible underneath as clickable document rows with the original icons, highlights, full text, priority tables and sources. Blurred skeleton rows invite the next three-customer search without inventing hidden prospects or implying they have already been found.
+A centered black swan changes between thirty playful illustrations with colorful props. An animated vivid pink, orange and violet progress bar shows the percentage of server research steps completed. Approximate remaining time adapts to observed stage durations; it is an estimate, not a completion promise. One short stage label explains the actual work. Transitions respect reduced-motion preferences. Three compact customer rows show email addresses or their unlock action directly. The letter-colored “Why contact them?” action opens the evidence and fit, while a separate editable email draft stays saved locally per search and company. Copy and mailto actions use the edited draft. A verified email newly found through a user-requested lookup triggers confetti; cached results do not. A flock takes flight on research completion, with reduced-motion support. Mission, Market and Ideal Customers stay visible underneath as clickable document rows with the original icons, highlights, full text, priority tables and sources. Blurred skeleton rows retain visible Unlock actions and one “Find the next ones” continuation button. They explicitly describe a new search, without inventing hidden prospects or implying they have already been found.
 
 ![Research interface with fictional QA data](docs/research-preview.jpg)
 

@@ -1,0 +1,64 @@
+{
+  "assets": [
+    {
+      "id": "recruiting",
+      "file": "recruiting.webp",
+      "prompt": "Use case: illustration-story. Asset type: polished profession illustration for ClientFlock website. A single whimsical black swan mascot with elegant curved long neck, friendly bright eyes, off-white beak, layered charcoal feathers, black webbed feet. Premium tactile 3D editorial clay and cut-paper craft texture, rich volumetric form and soft studio light, charming and inventive rather than generic vector icon. A compact fully-contained square composition, entire swan and every prop visible, generous clear transparent margins. Transparent background with true alpha, no environment, no opaque floor or backdrop. Predominantly black and white with the specified saturated accent colors only. No text, letters, numbers, logos, watermarks or interface. The swan is an attentive recruiter seated beside three small portrait cards showing friendly abstract bird faces, inspecting one through a large orange-handled magnifying glass held by its wing. One orange folder, confident curious expression. Distinct lively recruiter vignette.",
+      "generator": "built-in image_gen",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 92888,
+      "alpha": true
+    },
+    {
+      "id": "catering",
+      "file": "catering.webp",
+      "prompt": "Use case: illustration-story. Asset type: polished profession illustration for ClientFlock website. A single whimsical black swan mascot with elegant curved long neck, friendly bright eyes, off-white beak, layered charcoal feathers, black webbed feet. Premium tactile 3D editorial clay and cut-paper craft texture, rich volumetric form and soft studio light, charming and inventive rather than generic vector icon. A compact fully-contained square composition, entire swan and every prop visible, generous clear transparent margins. Transparent background with true alpha, no environment, no opaque floor or backdrop. Predominantly black and white with the specified saturated accent colors only. No text, letters, numbers, logos, watermarks or interface. The swan is a delighted chef wearing a crisp white chef hat, presenting a tiny silver cloche lifted to reveal a giant strawberry atop a spectacular pink frosted miniature cake on a white plate. A subtle pink icing smear on the beak. Distinct delicious catering vignette.",
+      "generator": "built-in image_gen",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 94854,
+      "alpha": true
+    },
+    {
+      "id": "video",
+      "file": "video.webp",
+      "prompt": "Use case: illustration-story. Asset type: polished profession illustration for ClientFlock website. A single whimsical black swan mascot with elegant curved long neck, friendly bright eyes, off-white beak, layered charcoal feathers, black webbed feet. Premium tactile 3D editorial clay and cut-paper craft texture, rich volumetric form and soft studio light, charming and inventive rather than generic vector icon. A compact fully-contained square composition, entire swan and every prop visible, generous clear transparent margins. Transparent background with true alpha, no environment, no opaque floor or backdrop. Predominantly black and white with the specified saturated accent colors only. No text, letters, numbers, logos, watermarks or interface. The swan is a creative video producer peering through a compact vintage cinema camera on a short tripod, one wing operating the camera, a violet film reel and curling strip alongside. Leaning playful pose. Distinct cinematic vignette.",
+      "generator": "built-in image_gen",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 127826,
+      "alpha": true
+    },
+    {
+      "id": "cybersecurity",
+      "file": "cybersecurity.webp",
+      "prompt": "Use case: illustration-story. Asset type: polished profession illustration for ClientFlock website. A single whimsical black swan mascot with elegant curved long neck, friendly bright eyes, off-white beak, layered charcoal feathers, black webbed feet. Premium tactile 3D editorial clay and cut-paper craft texture, rich volumetric form and soft studio light, charming and inventive rather than generic vector icon. A compact fully-contained square composition, entire swan and every prop visible, generous clear transparent margins. Transparent background with true alpha, no environment, no opaque floor or backdrop. Predominantly black and white with the specified saturated accent colors only. No text, letters, numbers, logos, watermarks or interface. The swan is a clever cybersecurity guardian, wearing a translucent cyan visor, one wing sheltering a tiny padlock beneath a clear curved cyan-tinted shield. Heroic but friendly stance. Keep the swan visibly black and richly feathered. Distinct security vignette.",
+      "generator": "built-in image_gen",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 110596,
+      "alpha": true
+    },
+    {
+      "id": "cleaning",
+      "file": "cleaning.webp",
+      "prompt": "Use case: illustration-story. Asset type: polished profession illustration for ClientFlock website. A single whimsical black swan mascot with elegant curved long neck, friendly bright eyes, off-white beak, layered charcoal feathers, black webbed feet. Premium tactile 3D editorial clay and cut-paper craft texture, rich volumetric form and soft studio light, charming and inventive rather than generic vector icon. A compact fully-contained square composition, entire swan and every prop visible, generous clear transparent margins. Transparent background with true alpha, no environment, no opaque floor or backdrop. Predominantly black and white with the specified saturated accent colors only. No text, letters, numbers, logos, watermarks or interface. The swan is a cheerful commercial cleaner with a small white mop and shiny silver bucket, polishing a giant translucent hot-pink soap bubble with its wing. A few small glossy bubbles float near the swan, playful tilt of the elegant neck. Distinct cleaning vignette.",
+      "generator": "built-in image_gen",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 148488,
+      "alpha": true
+    }
+  ]
+}

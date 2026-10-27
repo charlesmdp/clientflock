@@ -74,34 +74,50 @@
     list.innerHTML=samples.map((s,i)=>'<article class="lead-card"><div class="lead-head">'+brandLogo(s,'lead-logo')+'<div class="lead-info"><h4><button class="lead-details" data-action="detail" data-sample="'+i+'" aria-label="View '+escape(s.name)+'">'+escape(s.name)+'</button></h4><p class="lead-meta">'+escape(s.type)+'</p><p class="lead-contact">Contact: <strong>'+escape(s.contact)+'</strong> · '+escape(s.role)+'</p></div><button class="lead-email" data-action="demo" data-sample="'+i+'" aria-label="Read email for '+escape(s.name)+'">'+plane+'See email</button></div><dl class="lead-reasons"><div><dt>Why reach out now</dt><dd>'+escape(s.whyNow)+'</dd></div><div><dt>What to offer</dt><dd>'+escape(s.sale)+'</dd></div></dl></article>').join('');
     if(animate){const scene=$('.scenario-scene');scene.classList.remove('is-changing');requestAnimationFrame(()=>{scene.classList.add('is-changing');clearTimeout(animationTimer);animationTimer=setTimeout(()=>scene.classList.remove('is-changing'),550);});}
   }
-  const roleIcons={
-    photobooth:'<path d="M7 6 9 3h6l2 3h3v14H4V6h3Z"/><circle cx="12" cy="12" r="4"/>',
-    fintech:'<path d="M4 7h16M16 3l4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
-    webdesign:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 22h8m-4-4v4M3 8h18m-8 3-2 4m-3-4-2 2 2 2m9-4 2 2-2 2"/>',
-    recruiting:'<circle cx="9" cy="7" r="3"/><path d="M3 21v-4a6 6 0 0 1 12 0v4m1-17a3 3 0 0 1 0 6m3 11v-4a5 5 0 0 0-3-4"/>',
-    catering:'<path d="M3 17h18M5 17v-2a7 7 0 0 1 14 0v2M12 8V4m-2 0h4M4 21h16"/>',
-    video:'<rect x="3" y="7" width="12" height="13" rx="2"/><path d="m15 11 6-3v11l-6-3M3 7l3-4h12"/>',
-    cybersecurity:'<path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7l-9-4Z"/><path d="m8 12 3 3 5-6"/>',
-    cleaning:'<path d="m13 12 7-9M7 11l8 5-4 6-8-5 4-6Zm3 2-4 6m7-4-4 6M4 3v4M2 5h4"/>'
-  };
-  const extraRoles=Object.keys(roleIcons).filter(key=>scenarios[key]);
+  const roleOrder=['pool','saas','lawyer','photobooth','fintech','webdesign','recruiting','catering','video','cybersecurity','cleaning'].filter(key=>scenarios[key]);
   const tablist=$('.scenario-tabs');
-  if(tablist)tablist.insertAdjacentHTML('beforeend',extraRoles.map((key,index)=>'<button type="button" role="tab" class="" id="tab-'+key+'" data-scenario="'+key+'" aria-controls="scenario-panel" aria-selected="false" tabindex="-1" style="--reveal-delay:'+(.25+index*.3)+'s"><svg viewBox="0 0 24 24" aria-hidden="true">'+roleIcons[key]+'</svg><span>'+escape(scenarios[key].label)+'</span></button>').join(''));
+  if(!tablist)return;
+  tablist.innerHTML=roleOrder.map((key,index)=>'<button type="button" role="tab" id="tab-'+key+'" data-scenario="'+key+'" aria-controls="scenario-panel" aria-selected="'+(index===0)+'" tabindex="'+(index===0?'0':'-1')+'"><span class="profession-art"><img src="/assets/professions/'+key+'.webp" alt="" width="160" height="140" decoding="async" '+(index>2?'loading="lazy"':'')+'></span><span class="profession-label">'+escape(scenarios[key].label)+'</span></button>').join('');
   const tabs=$$('[data-scenario]');
+  const pageCount=Math.ceil(tabs.length/3);
+  let page=0,manual=false;
+  const pager=document.createElement('div');
+  pager.className='profession-pages';pager.setAttribute('role','group');pager.setAttribute('aria-label','More example businesses');
+  pager.innerHTML=Array.from({length:pageCount},(_,index)=>'<button type="button" data-profession-page="'+index+'" aria-label="Show '+roleOrder.slice(index*3,index*3+3).map(key=>escape(scenarios[key].label)).join(', ')+'" aria-pressed="'+(index===0)+'"><span aria-hidden="true"></span></button>').join('');
+  tablist.after(pager);
+  function showPage(nextPage,select=true){
+    page=(nextPage+pageCount)%pageCount;
+    tablist.dataset.visibleCount=String(Math.min(3,tabs.length-page*3));
+    tabs.forEach((tab,index)=>{
+      const group=Math.floor(index/3);
+      tab.hidden=group!==page;tab.style.setProperty('--role-delay',((index%3)*65)+'ms');
+      if(group===page||group===(page+1)%pageCount)tab.querySelector('img').loading='eager';
+    });
+    $$('[data-profession-page]',pager).forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.professionPage)===page)));
+    if(select){activeScenario=tabs[page*3].dataset.scenario;renderCustomers(true);}
+  }
   tabs.forEach((tab,index)=>{
-    tab.addEventListener('click',()=>{if(activeScenario===tab.dataset.scenario)return;activeScenario=tab.dataset.scenario;renderCustomers(true);});
-    tab.addEventListener('keydown',e=>{
-      let next=index;if(e.key==='ArrowRight')next=(index+1)%tabs.length;else if(e.key==='ArrowLeft')next=(index-1+tabs.length)%tabs.length;else if(e.key==='Home')next=0;else if(e.key==='End')next=tabs.length-1;else return;
-      e.preventDefault();tabs[next].focus();tabs[next].click();
+    tab.addEventListener('click',()=>{
+      manual=true;
+      if(activeScenario!==tab.dataset.scenario){activeScenario=tab.dataset.scenario;renderCustomers(true);}
+      showPage(Math.floor(index/3),false);
+    });
+    tab.addEventListener('keydown',event=>{
+      let next=index;
+      if(event.key==='ArrowRight')next=(index+1)%tabs.length;
+      else if(event.key==='ArrowLeft')next=(index-1+tabs.length)%tabs.length;
+      else if(event.key==='Home')next=0;
+      else if(event.key==='End')next=tabs.length-1;
+      else return;
+      event.preventDefault();manual=true;
+      showPage(Math.floor(next/3),false);
+      tabs[next].click();tabs[next].focus({preventScroll:true});
     });
   });
-  let page=0,manual=false;
-  const pageCount=Math.ceil(tabs.length/3);
-  const controls=document.createElement('div');controls.className='role-pager';controls.innerHTML='<span class="role-page-label"></span><button type="button" aria-label="Previous professions">←</button><button type="button" aria-label="Next professions">→</button><button type="button" class="role-pause" aria-label="Pause rotating professions">Ⅱ</button>';tablist.after(controls);
-  function showPage(n,select=true){page=(n+pageCount)%pageCount;tabs.forEach((t,i)=>{t.hidden=Math.floor(i/3)!==page;t.style.setProperty('--role-delay',((i%3)*70)+'ms')});controls.querySelector('span').textContent=(page+1)+' / '+pageCount;if(select){activeScenario=tabs[page*3].dataset.scenario;renderCustomers(true)}}
-  const buttons=controls.querySelectorAll('button');buttons[0].onclick=()=>{manual=true;showPage(page-1)};buttons[1].onclick=()=>{manual=true;showPage(page+1)};buttons[2].onclick=()=>{manual=!manual;buttons[2].textContent=manual?'▷':'Ⅱ';buttons[2].setAttribute('aria-label',manual?'Resume rotating professions':'Pause rotating professions')};
-  tabs.forEach((tab,i)=>tab.addEventListener('click',()=>{manual=true;showPage(Math.floor(i/3),false)}));
-  tablist.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){const selected=tabs.findIndex(t=>t.dataset.scenario===activeScenario);showPage(Math.floor(selected/3),false);tabs[selected].focus()}});
-  setInterval(()=>{if(!manual&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&!tablist.matches(':hover')&&!controls.matches(':hover')&&!tablist.contains(document.activeElement)&&!controls.contains(document.activeElement)&&!document.querySelector('dialog[open]'))showPage(page+1)},6500);
+  $$('[data-profession-page]',pager).forEach(button=>button.addEventListener('click',()=>{manual=true;showPage(Number(button.dataset.professionPage));}));
+  const preview=$('.lead-preview');
+  setInterval(()=>{
+    if(!manual&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&!preview.matches(':hover')&&!preview.contains(document.activeElement)&&!document.querySelector('dialog[open]'))showPage(page+1);
+  },8000);
   showPage(0,false);renderCustomers();
 })();

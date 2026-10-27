@@ -1,4 +1,3 @@
 import {api} from '../server/research.mjs';
 import centered from '../content/index.html';
-import split from '../content/split.html';
-export default {async fetch(request,env){const result=await api(request,env);if(result)return result;const path=new URL(request.url).pathname;if(path==='/'||path==='/index.html'||path==='/split.html')return new Response(path==='/split.html'?split:centered,{headers:{'Content-Type':'text/html; charset=utf-8'}});return env.ASSETS.fetch(request);}};
+export default {async fetch(request,env){const result=await api(request,env);if(result)return result;const url=new URL(request.url),path=url.pathname;if(path==='/split.html'){url.pathname='/';return Response.redirect(url.href,308);}if(path==='/'||path==='/index.html')return new Response(centered,{headers:{'Content-Type':'text/html; charset=utf-8'}});return env.ASSETS.fetch(request);}};

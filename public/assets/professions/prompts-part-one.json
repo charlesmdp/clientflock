@@ -1,0 +1,71 @@
+{
+  "method": "built-in image_gen",
+  "illustrations": [
+    {
+      "key": "pool",
+      "prompt": "Use case: illustration-story. Asset: a small premium website profession illustration, square and genuinely transparent background. A delightful sculpted miniature BLACK SWAN pool builder, elegant long curved neck, big expressive eyes, ivory beak, layered charcoal feather texture, using one wing to place small white mosaic tiles around a tiny oval swimming pool with bright turquoise water and a hot pink inflatable ring. Sculptural 3D clay illustration with tactile handmade surface, refined lighting, endearing but not childish. Entire swan and pool visible, compact composition centered with generous transparent margins. Predominantly charcoal and ivory, vivid pink and turquoise accents. No people, words, letters, numbers, branding, watermark, border, background scene. Not a flat icon, not an outline icon.",
+      "source": "/workspace/scratch/297c99e5e865/generated_images/exec-11b3f73f-5cce-4ee7-9522-f6c5a26db603.png",
+      "file": "pool.webp",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 123424
+    },
+    {
+      "key": "saas",
+      "prompt": "Use case: illustration-story. Asset: a small premium website profession illustration, square and genuinely transparent background. A delightful sculpted miniature BLACK SWAN SaaS founder, elegant long curved neck, big expressive eyes, ivory beak, layered charcoal feather texture, sitting thoughtfully at a small ivory laptop with a vivid violet screen showing simple abstract blocks, one feathered wing on keyboard and the other holding a tiny yellow lightbulb. Sculptural 3D clay illustration with tactile handmade surface, refined lighting, endearing but not childish. Entire swan and objects visible, compact composition centered with generous transparent margins. Predominantly charcoal and ivory, vivid violet accent. No people, words, letters, numbers, code text, branding, watermark, border, background scene. Not a flat icon, not an outline icon.",
+      "source": "/workspace/scratch/297c99e5e865/generated_images/exec-6f429c13-f8b6-4996-bf2d-4ad2b1172f2f.png",
+      "file": "saas.webp",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 72510
+    },
+    {
+      "key": "lawyer",
+      "prompt": "Use case: illustration-story. Asset: a small premium website profession illustration, square and genuinely transparent background. A delightful sculpted miniature BLACK SWAN business lawyer in Brazil, elegant long curved neck, big expressive eyes, ivory beak, layered charcoal feather texture, wearing tiny round glasses and carrying an ivory briefcase with one wing, other wing resting on a neat stack of blank ivory contracts with vivid lime green document tabs and a tiny yellow ribbon. Sculptural 3D clay illustration with tactile handmade surface, refined lighting, endearing but not childish. Entire swan and objects visible, compact composition centered with generous transparent margins. Predominantly charcoal and ivory, lime and yellow accents. No people, words, letters, numbers, official seals, branding, watermark, border, background scene. Not a flat icon, not an outline icon.",
+      "source": "/workspace/scratch/297c99e5e865/generated_images/exec-8be10aa4-75c8-4a58-8391-c019c037bdef.png",
+      "file": "lawyer.webp",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 83124
+    },
+    {
+      "key": "photobooth",
+      "prompt": "Use case: illustration-story. Asset: a small premium website profession illustration, square and genuinely transparent background. A delightful sculpted miniature BLACK SWAN photobooth rental entrepreneur, elegant long curved neck, big expressive eyes, ivory beak, layered charcoal feather texture, standing beside a compact ivory box photo booth on a little pedestal, a large circular black lens and vivid hot pink curtain strip. The swan holds a playful pink photo strip showing three tiny black swan silhouettes with no text. Sculptural 3D clay illustration with tactile handmade surface, refined lighting, endearing but not childish. Entire swan and objects visible, compact composition centered with generous transparent margins. Predominantly charcoal and ivory, vivid hot pink accent. No people, words, letters, numbers, branding, watermark, border, background scene. Not a flat icon, not an outline icon.",
+      "source": "/workspace/scratch/297c99e5e865/generated_images/exec-a6180243-5f05-4b6b-b272-d8d8379cfc03.png",
+      "file": "photobooth.webp",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 89306
+    },
+    {
+      "key": "fintech",
+      "prompt": "Use case: illustration-story. Asset: a small premium website profession illustration, square and genuinely transparent background. A delightful sculpted miniature BLACK SWAN fintech salesperson, elegant long curved neck, big expressive eyes, ivory beak, layered charcoal feather texture, confidently holding an oversized vivid orange payment card with a simple ivory chip and no lettering, beside a small ivory calculator whose keys are blank and three sculpted orange coins. Sculptural 3D clay illustration with tactile handmade surface, refined lighting, endearing but not childish. Entire swan and objects visible, compact composition centered with generous transparent margins. Predominantly charcoal and ivory, vivid orange accent. No people, words, letters, numbers, branding, watermark, border, background scene. Not a flat icon, not an outline icon.",
+      "source": "/workspace/scratch/297c99e5e865/generated_images/exec-2ec60f27-f234-4f44-bc19-48ab726f01ac.png",
+      "file": "fintech.webp",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 71082
+    },
+    {
+      "key": "webdesign",
+      "prompt": "Use case: illustration-story. Asset: a small premium website profession illustration, square and genuinely transparent background. A delightful sculpted miniature BLACK SWAN web designer, elegant long curved neck, big expressive eyes, ivory beak, layered charcoal feather texture, holding a fine paintbrush while thoughtfully arranging two floating ivory website panels with vivid pink, blue and yellow abstract geometric blocks, no text, like a tactile moodboard. Sculptural 3D clay illustration with tactile handmade surface, refined lighting, endearing but not childish. Entire swan and objects visible, compact composition centered with generous transparent margins. Predominantly charcoal and ivory, bright playful accents. No people, words, letters, numbers, code text, branding, watermark, border, background scene. Not a flat icon, not an outline icon.",
+      "source": "/workspace/scratch/297c99e5e865/generated_images/exec-80298e7a-6b6d-4233-b01c-4e757b3fe501.png",
+      "file": "webdesign.webp",
+      "size": [
+        768,
+        768
+      ],
+      "bytes": 86726
+    }
+  ]
+}

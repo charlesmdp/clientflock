@@ -1,6 +1,5 @@
 import { api } from "../server/research.mjs";
 import centered from "../content/index.html?raw";
-import split from "../content/split.html?raw";
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
@@ -10,7 +9,12 @@ const worker = {
     const result = await api(request, env);
     if (result) return result;
     const path = new URL(request.url).pathname;
-    if (path === '/' || path === '/index.html' || path === '/split.html') return new Response(path === '/split.html' ? split : centered, {headers:{'Content-Type':'text/html; charset=utf-8'}});
+    if (path === '/split.html') {
+      const target = new URL(request.url);
+      target.pathname = '/';
+      return Response.redirect(target.href, 308);
+    }
+    if (path === '/' || path === '/index.html') return new Response(centered, {headers:{'Content-Type':'text/html; charset=utf-8'}});
     let binding = ctx.props?.CONNECTORS;
     // Local preview emulates the same request-scoped capability. This branch and
     // the auxiliary service binding are absent from production builds.
