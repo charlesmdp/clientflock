@@ -60,6 +60,7 @@
     [modal, detail].forEach(container => container.querySelectorAll('[data-compose="' + index + '"],[data-open-email="' + index + '"]').forEach(link => { link.href = composeUrl(contact, index); }));
   }
   function removeEffects() {
+    window.ClientFlockBirds?.clear(modal);
     effectTimers.forEach(clearTimeout); effectTimers.clear();
     [modal, detail].forEach(container => container.querySelectorAll('.rf-celebration,.rf-flight').forEach(element => element.remove()));
   }
@@ -78,10 +79,7 @@
     temporaryEffect(layer, detail.open ? detail : modal, 2400);
   }
   function flyFlock() {
-    if (reducedMotion() || !modal.open || document.hidden) return;
-    const flock = document.createElement('div'); flock.className = 'rf-flight'; flock.setAttribute('aria-hidden', 'true');
-    flock.innerHTML = Array.from({ length: 7 }, (_, i) => '<span class="rf-flying-bird" style="--bird-delay:' + (i * .15) + 's;--bird-y:' + (35 + (i % 3) * 8) + 'vh;--bird-size:' + (25 + (i % 3) * 6) + 'px"><svg viewBox="0 0 64 40"><path class="rf-wing-left" d="M32 23C25 9 13 8 1 13c13 0 19 8 29 14Z"/><path class="rf-wing-right" d="M32 23C38 8 49 3 63 4c-12 5-17 12-29 23Z"/><path d="m29 22 7-1 3 7 7 3-9 1-5-4-8 4 5-10Z"/></svg></span>').join('');
-    temporaryEffect(flock, modal, 4800);
+    window.ClientFlockBirds?.fly(modal);
   }
 
   const phaseCopy = [
@@ -272,12 +270,13 @@
   function platformMarkup(lead, index) {
     const platform = lead.platform || {}, checked = platform.status === 'verified' && typeof platform.name === 'string' && platform.name.trim();
     const required = qualification()?.requiredPlatforms || [];
+    if (!checked && !required.length) return '';
     const unavailable = platform.status === 'unavailable';
-    const label = checked ? platform.name + ' verified' : unavailable ? 'Platform check unavailable' : required.includes('Shopify') ? 'Shopify not confirmed' : 'Platform not confirmed';
+    const label = checked ? platform.name + ' verified' : required.join(' / ') + ' not confirmed';
     const status = checked ? 'verified' : unavailable ? 'unavailable' : 'unknown';
     const evidence = Array.isArray(platform.evidence) ? platform.evidence.filter(value => typeof value === 'string' && value.trim()) : [];
     const proofUrl = safeUrl(platform.url || lead.websiteCheck?.url || lead.website);
-    return '<details class="rf-platform-evidence"><summary data-focus="platform-proof-' + index + '"><span class="rf-platform-status" data-status="' + status + '">' + (checked ? '✓ ' : '') + esc(label) + '</span><span>View check <b>+</b></span></summary><div>' + (evidence.length ? '<ul>' + evidence.map(value => '<li>' + esc(value) + '</li>').join('') + '</ul>' : '<p>' + (unavailable ? 'The website could not be checked reliably. No platform has been confirmed.' : 'No conclusive platform evidence was found. This does not mean the company does not use Shopify.') + '</p>') + (proofUrl !== '#' ? '<a href="' + esc(proofUrl) + '" target="_blank" rel="noopener noreferrer">Open the checked page ↗</a>' : '') + (platform.checkedAt ? '<small>Checked ' + esc(date(platform.checkedAt)) + '</small>' : '') + '</div></details>';
+    return '<details class="rf-platform-evidence"><summary data-focus="platform-proof-' + index + '"><span class="rf-platform-status" data-status="' + status + '">' + (checked ? '✓ ' : '') + esc(label) + '</span><span>View check <b>+</b></span></summary><div>' + (evidence.length ? '<ul>' + evidence.map(value => '<li>' + esc(value) + '</li>').join('') + '</ul>' : '<p>' + (unavailable ? 'The website could not be checked reliably. No platform has been confirmed.' : 'No conclusive platform evidence was found. The required software has not been confirmed on this website.') + '</p>') + (proofUrl !== '#' ? '<a href="' + esc(proofUrl) + '" target="_blank" rel="noopener noreferrer">Open the checked page ↗</a>' : '') + (platform.checkedAt ? '<small>Checked ' + esc(date(platform.checkedAt)) + '</small>' : '') + '</div></details>';
   }
 
   function websiteMarkup(lead, index) {
@@ -292,13 +291,13 @@
     const leads = job?.data?.leads || [];
     if (!leads.length) return '<p>Your shortlist is being prepared.</p>';
     const canFindMore = Number(job?.data?.pagination?.page || 1) < 3;
-    const locked = '<div class="rf-more-preview"><div class="rf-locked-rows" aria-label="Preview of the next shortlist">' + [1, 2].map((number) => '<div class="rf-locked-row"><div class="rf-locked-profile" aria-hidden="true"><span class="rf-blur-logo"></span><span class="rf-locked-lines"><i></i><i></i></span></div><div class="rf-locked-actions"><button class="rf-locked-email" data-more aria-label="Unlock the next customers">' + icons.lock + '<span>Unlock</span></button></div></div>').join('') + '</div><div class="rf-next-action"><button class="rf-unlock" data-more data-focus="more-preview">' + icons.spark + ' Find the next ones</button><small>Unlock a fresh shortlist. We’ll research 3 new companies.</small></div></div>';
+    const locked = '<div class="rf-more-preview"><div class="rf-locked-rows" aria-label="Preview of the next shortlist">' + [1, 2].map((number) => '<div class="rf-locked-row"><div class="rf-locked-profile" aria-hidden="true"><span class="rf-blur-logo"></span><span class="rf-locked-lines"><i></i><i></i></span></div><div class="rf-locked-actions"><button class="rf-locked-email" data-more aria-label="Unlock the next customers">' + icons.lock + '<span>Unlock</span></button></div></div>').join('') + '</div></div>';
     return '<section class="rf-shortlist" aria-label="Companies and people to contact"><header class="rf-shortlist-header"><span class="rf-section-icon">' + icons.mail + '</span><h2>People to contact</h2><span class="rf-ready-count">' + leads.length + ' ready</span></header><div class="rf-results">' + leads.map(customerRow).join('') + '</div>' + (canFindMore ? locked : '<p class="rf-shortlist-end">You’ve reached the end of this research. Your earlier shortlists are saved above.</p>') + '</section>';
   }
   function emailUnlock(contact, index, className) {
     const retryable = ['auth_configuration', 'people_response', 'people_no_match', 'daily_limit'].includes(contact?.errorCode) && contact?.retryable === true;
     const wait = retryable && (contact.retryAt || 0) > Date.now();
-    return '<button class="' + className + '" ' + (retryable ? 'data-contact-retry' : 'data-contact') + '="' + index + '"' + (wait ? ' disabled' : '') + '>' + icons.lock + '<span>Unlock email address <b>for free</b></span></button>';
+    return '<button class="' + className + ' rf-email-unlock-text" aria-label="Unlock email address for free" ' + (retryable ? 'data-contact-retry' : 'data-contact') + '="' + index + '"' + (wait ? ' disabled' : '') + '>' + rainbowLabel('Unlock email address for free') + '</button>';
   }
   function rowContactMarkup(contact, lead, index) {
     if (contact?.email) return '<a class="rf-row-address" data-compose="' + index + '" href="' + esc(composeUrl(contact, index)) + '">' + esc(contact.email) + '</a><span class="rf-row-address-state">' + (validFoundEmail(contact) ? '✓ Verified' : 'Review before using') + '</span>';
@@ -341,7 +340,7 @@
     } else if (kind === 'more') {
       title = 'Your next three.';
       subtitle = 'Keep exploring the people who could need what you sell.';
-      content = '<div class="rf-more-dialog"><span class="rf-more-dialog-art">' + icons.spark + '</span><p>We’ll use your mission, market and ideal customers to research a fresh shortlist, and keep these companies out of it.</p><button class="research-button" data-find-more>Find the next ones ' + icons.arrow + '</button><small>The same strategy, a fresh shortlist. Your first three stay saved.</small><p class="rf-more-feedback" role="status"></p></div>';
+      content = '<div class="rf-more-dialog"><span class="rf-more-dialog-art">' + icons.spark + '</span><p>We’ll use your mission, market and ideal customers to research a fresh shortlist, and keep these companies out of it.</p><button class="research-button" data-find-more>Research my next 3 ' + icons.arrow + '</button><small>The same strategy, a fresh shortlist. Your first three stay saved.</small><p class="rf-more-feedback" role="status"></p></div>';
     }
     detail.dataset.kind = kind; detail.dataset.ready = String(readyDocs());
     const scroll = preserveScroll ? detail.querySelector('.rf-detail-body')?.scrollTop || 0 : 0;
@@ -355,14 +354,14 @@
   function contactMarkup(contact, lead, index) {
     if (contact?.email) {
       const verified = contact.status === 'found';
-      return '<div class="rf-contact-result"><a data-compose="' + index + '" href="' + esc(composeUrl(contact, index)) + '">' + esc(contact.email) + '</a><span class="' + (verified ? 'verified' : 'risky') + '">' + (verified ? (contact.contactKind === 'company_mailbox' ? '✓ Verified company inbox' : '✓ Verified by Icypeas') : 'Review before using · ' + esc(contact.certainty || 'uncertain')) + '</span>' + (contact.sourceUrl && safeUrl(contact.sourceUrl) !== '#' ? '<a class="rf-contact-source" href="' + esc(safeUrl(contact.sourceUrl)) + '" target="_blank" rel="noopener noreferrer">Published on the company website ↗</a>' : '') + '</div>';
+      return '<div class="rf-contact-result"><a data-compose="' + index + '" href="' + esc(composeUrl(contact, index)) + '">' + esc(contact.email) + '</a><span class="' + (verified ? 'verified' : 'risky') + '">' + (verified ? (contact.contactKind === 'company_mailbox' ? '✓ Verified company inbox' : '✓ Verified email') : 'Review before using · ' + esc(contact.certainty || 'uncertain')) + '</span>' + (contact.sourceUrl && safeUrl(contact.sourceUrl) !== '#' ? '<a class="rf-contact-source" href="' + esc(safeUrl(contact.sourceUrl)) + '" target="_blank" rel="noopener noreferrer">Published on the company website ↗</a>' : '') + '</div>';
     }
     const busy = contactRunning.has(index);
     if (contact?.status === 'working') return '<span class="rf-contact-working" role="status"><i></i> ' + (busy ? esc(contact.message || 'Finding and checking their email…') : 'Your email search is saved.') + '</span>' + (!busy ? '<button class="rf-find-contact" data-contact="' + index + '">Continue email search ↗</button>' : '');
     const retryable = ['auth_configuration', 'people_response', 'people_no_match', 'daily_limit'].includes(contact?.errorCode) && contact?.retryable === true;
     const wait = retryable ? Math.max(0, Math.ceil(((contact.retryAt || 0) - Date.now()) / 1000)) : 0;
     const state = contact?.message || (contact ? 'We haven’t found a verified address for this company yet.' : 'Find the right person and check their email address.');
-    return '<div class="rf-unlock-contact">' + emailUnlock(contact, index, 'rf-find-contact') + '<span class="rf-contact-empty">' + esc(state) + '</span>' + (retryable && contact.requiresNewLookup === true ? '<small class="rf-contact-credit-note">We’ll try a broader lookup. This may use the site’s Icypeas credits.</small>' : '') + (wait ? '<small class="rf-contact-cooldown" role="status">' + (wait >= 3600 ? 'Daily limit reached. Try again tomorrow.' : 'Try again in ' + wait + ' seconds.') + '</small>' : '') + '</div>';
+    return '<div class="rf-unlock-contact">' + emailUnlock(contact, index, 'rf-find-contact') + '<span class="rf-contact-empty">' + esc(state) + '</span>' + (retryable && contact.requiresNewLookup === true ? '<small class="rf-contact-credit-note">We’ll try a broader search for the right person.</small>' : '') + (wait ? '<small class="rf-contact-cooldown" role="status">' + (wait >= 3600 ? 'Daily limit reached. Try again tomorrow.' : 'Try again in ' + wait + ' seconds.') + '</small>' : '') + '</div>';
   }
 
   function bindContactButtons(container = detail) {
@@ -465,7 +464,7 @@
     } catch (error) {
       if (run !== generation) return;
       const feedback = detail.querySelector('.rf-more-feedback'); if (feedback) feedback.textContent = error.message;
-      button.disabled = false; button.innerHTML = 'Find the next ones ' + icons.arrow;
+      button.disabled = false; button.innerHTML = 'Research my next 3 ' + icons.arrow;
     }
   }
 

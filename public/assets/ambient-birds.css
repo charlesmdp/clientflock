@@ -1,0 +1,27 @@
+/* A light flock lives behind the page, never over its controls. */
+.cf-bird-sky { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; user-select:none; contain:strict; }
+.cf-bird-sky[data-direction="left"] { transform:scaleX(-1); }
+.cf-swan-flight { position:absolute; top:var(--swan-y); left:-14vw; display:block; width:var(--swan-size); color:#262228; opacity:0; animation:cf-swan-cross var(--swan-duration) linear var(--swan-delay) both; will-change:transform,opacity; }
+.cf-swan-glide { display:block; animation:cf-swan-drift 2.4s ease-in-out var(--swan-phase) infinite; }
+.cf-swan-flight svg { display:block; width:100%; overflow:visible; fill:currentColor; }
+.cf-swan-far-wing { opacity:.62; transform-origin:40px 34px; animation:cf-swan-far-flap var(--swan-flap) ease-in-out var(--swan-phase) infinite; }
+.cf-swan-near-wing { transform-origin:43px 35px; animation:cf-swan-near-flap var(--swan-flap) ease-in-out var(--swan-phase) infinite; }
+@keyframes cf-swan-cross {
+  0% { transform:translate(0,0) rotate(var(--swan-roll)); opacity:0; }
+  9% { opacity:var(--swan-opacity); }
+  48% { transform:translate(61vw,var(--swan-arc)) rotate(-3deg); }
+  87% { opacity:var(--swan-opacity); }
+  100% { transform:translate(128vw,var(--swan-rise)) rotate(1deg); opacity:0; }
+}
+@keyframes cf-swan-drift { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-5px); } }
+@keyframes cf-swan-near-flap {
+  0%,100% { transform:scaleY(.94) rotate(-4deg); }
+  43% { transform:scaleY(-.62) rotate(9deg); }
+  68% { transform:scaleY(.45) rotate(-2deg); }
+}
+@keyframes cf-swan-far-flap {
+  0%,100% { transform:scaleY(.85) rotate(5deg); }
+  48% { transform:scaleY(-.5) rotate(-5deg); }
+  72% { transform:scaleY(.4) rotate(2deg); }
+}
+@media(prefers-reduced-motion:reduce) { .cf-bird-sky { display:none!important; } }

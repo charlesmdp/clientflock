@@ -65,14 +65,67 @@
     if(saved.mode==='description')mode='description';renderMode();
   });
   const plane='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 3-6.5 18-4-7.5L3 9.5 21 3ZM10.5 13.5 21 3"/></svg>';
-  let animationTimer;
+  let animationTimer, swapTimer, dustFrame = 0, transitionToken = 0, switching = false;
+  const scene = $('.scenario-scene'), list = $('#prospect-list');
   function renderCustomers(animate=false){
     const scenario=scenarios[activeScenario],list=$('#prospect-list');if(!list)return;
     samples=scenario.leads;
     $('#scenario-panel').setAttribute('aria-labelledby','tab-'+activeScenario);
     $$('[data-scenario]').forEach(tab=>{const selected=tab.dataset.scenario===activeScenario;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=tab.hasAttribute('data-scenario-clone')?-1:selected?0:-1;});
-    list.innerHTML=samples.map((s,i)=>'<article class="lead-card"><div class="lead-head">'+brandLogo(s,'lead-logo')+'<div class="lead-info"><h4><button class="lead-details" data-action="detail" data-sample="'+i+'" aria-label="View '+escape(s.name)+'">'+escape(s.name)+'</button></h4><p class="lead-meta">'+escape(s.type)+'</p><p class="lead-contact">Contact: <strong>'+escape(s.contact)+'</strong> · '+escape(s.role)+'</p></div><button class="lead-email" data-action="demo" data-sample="'+i+'" aria-label="Read email for '+escape(s.name)+'">'+plane+'See email</button></div><dl class="lead-reasons"><div><dt>Why reach out now</dt><dd>'+escape(s.whyNow)+'</dd></div><div><dt><span class="offer-badge">What to offer <span aria-hidden="true">✦</span></span></dt><dd>'+escape(s.sale)+'</dd></div></dl></article>').join('');
-    if(animate){const scene=$('.scenario-scene');scene.classList.remove('is-changing');requestAnimationFrame(()=>{scene.classList.add('is-changing');clearTimeout(animationTimer);animationTimer=setTimeout(()=>scene.classList.remove('is-changing'),550);});}
+    list.innerHTML=samples.map((s,i)=>'<article class="lead-card"><div class="lead-head">'+brandLogo(s,'lead-logo')+'<div class="lead-info"><h4><button class="lead-details" data-action="detail" data-sample="'+i+'" aria-label="View '+escape(s.name)+'">'+escape(s.name)+'</button></h4><p class="lead-meta">'+escape(s.type)+'</p><p class="lead-contact">Contact: <strong>'+escape(s.contact)+'</strong> · '+escape(s.role)+'</p></div><button class="lead-email" data-action="demo" data-sample="'+i+'" aria-label="Read email for '+escape(s.name)+'">'+plane+'See email</button></div><dl class="lead-reasons"><div><dt>Why reach out now</dt><dd>'+escape(s.whyNow)+'</dd></div><div><dt><span class="offer-badge">What to offer <span aria-hidden="true">✦</span></span></dt><dd>'+escape(s.sale)+'</dd></div></dl><button class="lead-draft-peek" data-action="demo" data-sample="'+i+'" aria-label="Read email: '+escape(s.subject)+'"><span class="lead-draft-label">'+plane+' Draft</span><span class="lead-draft-subject">'+escape(s.subject)+'</span><span class="lead-draft-opening">'+escape(s.email.split('\n')[0])+'</span></button></article>').join('');
+    if(animate){scene.classList.add('is-changing');clearTimeout(animationTimer);animationTimer=setTimeout(()=>{scene.classList.remove('is-changing');list.style.minHeight='';},800);}
+  }
+  // Small pieces start on the actual text and marks, then drift away with the old example.
+  // This stays local to the preview: no screenshot library, network requests or layout-sized particle DOM.
+  function scatterPreview(){
+    scene.querySelector('.scenario-dust')?.remove();cancelAnimationFrame(dustFrame);
+    if(!list || motion.matches)return;
+    const bounds=list.getBoundingClientRect(), canvas=document.createElement('canvas');
+    const width=Math.ceil(bounds.width), height=Math.ceil(bounds.height), scale=Math.min(devicePixelRatio||1,2);
+    if(!width||!height)return;
+    canvas.className='scenario-dust';canvas.setAttribute('aria-hidden','true');
+    canvas.width=Math.ceil(width*scale);canvas.height=Math.ceil((height+120)*scale);
+    canvas.style.width=width+'px';canvas.style.height=(height+120)+'px';
+    const context=canvas.getContext('2d');if(!context)return;
+    const particles=[], characterStep=Math.max(2,Math.ceil(list.textContent.length/500));
+    const walker=document.createTreeWalker(list,NodeFilter.SHOW_TEXT);
+    let node;
+    while((node=walker.nextNode())&&particles.length<640){
+      if(!node.textContent.trim())continue;
+      const style=getComputedStyle(node.parentElement), range=document.createRange();
+      for(let offset=0;offset<node.length&&particles.length<640;offset+=characterStep){
+        if(!node.textContent[offset].trim())continue;
+        range.setStart(node,offset);range.setEnd(node,Math.min(offset+1,node.length));
+        const r=range.getBoundingClientRect();
+        if(r.width&&r.height)particles.push({x:r.left-bounds.left+Math.random()*r.width,y:r.top-bounds.top+Math.random()*r.height,color:style.color,size:.6+Math.random()*1.4,delay:(r.left-bounds.left)/width*.34,vx:45+Math.random()*105,vy:-18-Math.random()*70,spin:Math.random()*5});
+      }
+    }
+    list.querySelectorAll('.brand-logo').forEach(mark=>{const r=mark.getBoundingClientRect();for(let i=0;i<14;i++)particles.push({x:r.left-bounds.left+Math.random()*r.width,y:r.top-bounds.top+Math.random()*r.height,color:'#777078',size:1+Math.random()*2,delay:(r.left-bounds.left)/width*.34,vx:50+Math.random()*130,vy:-20-Math.random()*80,spin:Math.random()*5});});
+    canvas.style.left=list.offsetLeft+'px';canvas.style.top=(list.offsetTop-60)+'px';list.parentElement.append(canvas);
+    context.scale(scale,scale);
+    let start;
+    function paint(now){
+      if(!canvas.isConnected)return;
+      start??=now;const time=(now-start)/1000;
+      context.clearRect(0,0,width,height+120);
+      for(const p of particles){const age=time-p.delay;if(age<0||age>1.05)continue;const progress=age/1.05;context.globalAlpha=Math.sin(Math.min(1,age*8)*Math.PI/2)*Math.pow(1-progress,1.7)*.7;context.fillStyle=p.color;context.fillRect(p.x+p.vx*age,p.y+60+p.vy*age+Math.sin(age*5+p.spin)*7,p.size,p.size);}
+      context.globalAlpha=1;
+      if(time<1.5&&!document.hidden&&!motion.matches)dustFrame=requestAnimationFrame(paint);else{canvas.remove();dustFrame=0;}
+    }
+    dustFrame=requestAnimationFrame(paint);
+  }
+  function changeScenario(key,animate=true){
+    if(!scenarios[key]||key===activeScenario&&!switching)return;
+    const token=++transitionToken;clearTimeout(swapTimer);clearTimeout(animationTimer);
+    scene.classList.remove('is-changing','is-dissolving');
+    list.inert=false;switching=false;
+    if(!animate||motion.matches){activeScenario=key;renderCustomers();list.style.minHeight='';scene.querySelector('.scenario-dust')?.remove();return;}
+    switching=true;list.style.minHeight=list.offsetHeight+'px';list.inert=true;
+    scatterPreview();void list.offsetWidth;scene.classList.add('is-dissolving');
+    swapTimer=setTimeout(()=>{
+      if(token!==transitionToken)return;
+      activeScenario=key;renderCustomers(true);scene.classList.remove('is-dissolving');list.inert=false;switching=false;revealActiveProfession();
+    },470);
   }
   const roleOrder=['pool','saas','lawyer','photobooth','fintech','webdesign','recruiting','catering','video','cybersecurity','cleaning'].filter(key=>scenarios[key]);
   const tablist=$('.scenario-tabs');
@@ -84,30 +137,57 @@
   tablist.before(viewport);viewport.append(tablist);
   const tabs=$$('[data-scenario]:not([data-scenario-clone])',tablist);
   const groups=$$('.profession-group',tablist);
-  let position=0,lastWritten=0,lastTime=0,frame=0,visible=true,manualUntil=0;
+  let position=0,lastWritten=0,lastTime=0,frame=0,visible=true,manualUntil=0,exampleTime=0,scrollTarget=null,exampleTimer=null,lastExampleTime=0;
+  const exampleDuration=9000;
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
   const canMove=()=>visible&&!document.hidden&&!motion.matches&&!viewport.matches(':hover')&&!viewport.contains(document.activeElement)&&!document.querySelector('dialog[open]')&&Date.now()>manualUntil;
+  const canSwitch=()=>canMove()&&!switching&&!$('#scenario-panel').matches(':hover')&&!scene.contains(document.activeElement);
   function keepInView(tab){
     const bounds=viewport.getBoundingClientRect(),item=tab.getBoundingClientRect();
     if(item.left<bounds.left+14||item.right>bounds.right-14){
       viewport.scrollLeft+=item.left-bounds.left-(bounds.width-item.width)/2;
-      position=viewport.scrollLeft;lastWritten=position;
+      position=viewport.scrollLeft;lastWritten=position;scrollTarget=null;
     }
   }
+  function revealActiveProfession(){
+    if(motion.matches)return;
+    const bounds=viewport.getBoundingClientRect(),center=bounds.left+bounds.width/2;
+    const candidates=$$('[data-scenario="'+activeScenario+'"]',tablist);
+    const tab=candidates.sort((a,b)=>Math.abs(a.getBoundingClientRect().left+a.offsetWidth/2-center)-Math.abs(b.getBoundingClientRect().left+b.offsetWidth/2-center))[0];
+    if(!tab)return;
+    const item=tab.getBoundingClientRect();
+    if(item.left<bounds.left+14||item.right>bounds.right-14){scrollTarget=viewport.scrollLeft+item.left-bounds.left-(bounds.width-item.width)/2;scrollTarget=Math.max(0,scrollTarget);}
+  }
   function drift(now){
-    const elapsed=lastTime?Math.min(now-lastTime,50):0;lastTime=now;
+    const rawElapsed=lastTime?Math.max(0,now-lastTime):0;
+    const elapsed=Math.min(rawElapsed,50);lastTime=now;
     if(canMove()){
       if(Math.abs(viewport.scrollLeft-lastWritten)>2)position=viewport.scrollLeft;
       const loop=groups[1].offsetLeft-groups[0].offsetLeft;
-      if(loop>0){position=(position+elapsed*.018)%loop;viewport.scrollLeft=position;lastWritten=viewport.scrollLeft;}
+      if(loop>0){
+        if(scrollTarget!==null){position+=(scrollTarget-position)*Math.min(elapsed/120,1);if(Math.abs(scrollTarget-position)<1){position=scrollTarget;scrollTarget=null;}}
+        else position=(position+elapsed*.018)%loop;
+        viewport.scrollLeft=position;lastWritten=viewport.scrollLeft;
+      }
     }else{position=viewport.scrollLeft;lastWritten=position;}
     frame=requestAnimationFrame(drift);
   }
-  function resume(){if(!frame&&!document.hidden&&!motion.matches){lastTime=0;frame=requestAnimationFrame(drift);}}
-  function suspend(){cancelAnimationFrame(frame);frame=0;lastTime=0;}
+  function tickExample(){
+    const now=Date.now(),viewingElapsed=Math.min(Math.max(0,now-lastExampleTime),1000);lastExampleTime=now;
+    if(canSwitch()){
+      exampleTime+=viewingElapsed;
+      if(exampleTime>=exampleDuration){
+        exampleTime=0;
+        const next=roleOrder[(roleOrder.indexOf(activeScenario)+1)%roleOrder.length];
+        changeScenario(next);
+      }
+    }
+  }
+  function resume(){if(!frame&&!document.hidden&&!motion.matches){lastTime=0;frame=requestAnimationFrame(drift);}if(!exampleTimer&&!document.hidden&&!motion.matches){lastExampleTime=Date.now();exampleTimer=setInterval(tickExample,250);}}
+  function suspend(){cancelAnimationFrame(frame);frame=0;lastTime=0;clearInterval(exampleTimer);exampleTimer=null;lastExampleTime=0;}
   $$('[data-scenario]',tablist).forEach(tab=>{
     tab.addEventListener('click',()=>{
-      if(activeScenario!==tab.dataset.scenario){activeScenario=tab.dataset.scenario;renderCustomers(true);}
+      exampleTime=0;manualUntil=Date.now()+12000;changeScenario(tab.dataset.scenario);
     });
     tab.addEventListener('focus',()=>keepInView(tab));
   });
@@ -120,10 +200,10 @@
     else return;
     event.preventDefault();tabs[next].click();tabs[next].focus({preventScroll:true});keepInView(tabs[next]);
   }));
-  viewport.addEventListener('touchstart',()=>{manualUntil=Date.now()+5000;},{passive:true});
-  viewport.addEventListener('wheel',()=>{manualUntil=Date.now()+3000;},{passive:true});
+  viewport.addEventListener('touchstart',()=>{manualUntil=Date.now()+5000;scrollTarget=null;},{passive:true});
+  viewport.addEventListener('wheel',()=>{manualUntil=Date.now()+3000;scrollTarget=null;},{passive:true});
   document.addEventListener('visibilitychange',()=>document.hidden?suspend():resume());
-  if('IntersectionObserver' in window)new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)resume();else suspend();},{rootMargin:'100px'}).observe(viewport);
-  motion.addEventListener('change',()=>{if(motion.matches){suspend();viewport.scrollLeft=0;}else resume();});
+  if('IntersectionObserver' in window)new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)resume();else suspend();},{threshold:.05}).observe(scene);
+  motion.addEventListener('change',()=>{if(motion.matches){suspend();viewport.scrollLeft=0;cancelAnimationFrame(dustFrame);scene.querySelector('.scenario-dust')?.remove();scene.classList.remove('is-dissolving','is-changing');}else resume();});
   renderCustomers();if(!motion.matches)resume();
 })();

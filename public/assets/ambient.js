@@ -157,7 +157,7 @@
   }
 
   function active() {
-    return desktop.matches && !reduced.matches && visible && !document.hidden && bottom > top;
+    return desktop.matches && !reduced.matches && visible && !document.hidden && !document.querySelector('dialog[open]') && bottom > top;
   }
   function updatePlayback() {
     if (frameId) cancelAnimationFrame(frameId);
@@ -184,6 +184,7 @@
   document.documentElement.addEventListener('pointerleave', clearPointer);
   window.addEventListener('blur', clearPointer);
   document.addEventListener('visibilitychange', updatePlayback);
+  new MutationObserver(updatePlayback).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
   reduced.addEventListener('change', updatePlayback);
   desktop.addEventListener('change', queueResize);
   window.addEventListener('resize', queueResize, { passive: true });

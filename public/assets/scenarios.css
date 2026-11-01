@@ -29,3 +29,22 @@
 @media(max-width:600px){.scenario-controls{padding:21px 13px 10px}.scenario-intro{margin-bottom:16px}.demo-title{font-size:25px;letter-spacing:-.9px}.scenario-intro p{font-size:10px}.profession-marquee{margin:0 -13px;padding:0 13px 4px;mask-image:linear-gradient(90deg,transparent,#000 13px,#000 calc(100% - 13px),transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 13px,#000 calc(100% - 13px),transparent)}.profession-group{gap:8px;padding-right:8px}.scenario-tabs button{gap:4px;width:116px;min-width:116px;padding:2px 2px 8px;border-radius:12px;font-size:10px}.profession-art{height:101px}.profession-label{padding:5px 7px;min-height:29px;border-radius:6px}.lead-reasons>div:last-child{grid-template-columns:1fr;gap:6px;padding:9px;margin:1px -5px 0}.lead-reasons>div:last-child dd{padding-top:0}.offer-badge{font-size:10px}}
 @media(max-width:400px){.demo-title{font-size:23px}}
 @media(prefers-reduced-motion:reduce){.profession-art img,.profession-label{transition:none}.scenario-tabs button:hover .profession-art img{transform:none}.profession-group-copy{display:none}}
+
+/* Each example becomes a little cloud of ink before the next one takes its place. */
+.scenario-scene #scenario-panel{position:relative;isolation:isolate;overflow:hidden}
+.scenario-scene #prospect-list{position:relative;z-index:1}
+.scenario-dust{position:absolute;z-index:3;pointer-events:none;max-width:none}
+.scenario-scene.is-dissolving #prospect-list{animation:scenario-dissolve .49s ease-in both;pointer-events:none}
+.scenario-scene.is-changing .lead-card{animation:scenario-reform .6s cubic-bezier(.2,.75,.25,1) both}
+.scenario-scene.is-changing .lead-card:nth-child(2){animation-delay:65ms}
+.scenario-scene.is-changing .lead-card:nth-child(3){animation-delay:130ms}
+.lead-draft-peek{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:8px;row-gap:3px;width:100%;margin:11px 0 0;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:#45424b;font:inherit}
+.lead-draft-label{display:inline-flex;align-items:center;gap:4px;color:#8b8790;font-size:9px;font-weight:550;padding-top:1px}
+.lead-draft-label svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
+.lead-draft-subject{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead-draft-opening{grid-column:2;font-size:10px;color:#8a8790;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead-draft-peek:hover .lead-draft-subject{text-decoration:underline;text-underline-offset:3px}
+.lead-draft-peek:focus-visible{outline:2px solid #29292d;outline-offset:5px;border-radius:2px}
+@keyframes scenario-dissolve{0%{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%);filter:blur(0)}45%{opacity:.85;clip-path:polygon(26% 0,100% 0,100% 100%,57% 100%);filter:blur(.35px)}100%{opacity:0;clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%);filter:blur(2px);transform:translateX(9px)}}
+@keyframes scenario-reform{from{opacity:0;filter:blur(3px);transform:translateY(7px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.scenario-scene.is-dissolving #prospect-list,.scenario-scene.is-changing .lead-card{animation:none!important}.scenario-dust{display:none}.lead-draft-peek{transition:none}}

@@ -600,6 +600,23 @@
 .rf-row-view .rainbow-word span:nth-child(6n+5) { color:#5267a6; }
 .rf-row-view .rainbow-word span:nth-child(6n+6) { color:#8253a5; }
 .rf-row-view:hover .rainbow-word { filter:none; }
+
+/* A text action in the exact Flock palette, without a button container. */
+.rf-row-unlock.rf-email-unlock-text,
+.research-detail .rf-unlock-contact .rf-find-contact.rf-email-unlock-text {
+  display:inline; min-height:0; margin:0; padding:5px 0; border:0; border-radius:0;
+  background:transparent; box-shadow:none; font-size:14px; line-height:1.65;
+  font-weight:750; letter-spacing:-.15px; cursor:pointer;
+}
+.rf-email-unlock-text .rainbow-word { white-space:normal; }
+.rf-row-unlock.rf-email-unlock-text:hover,
+.research-detail .rf-find-contact.rf-email-unlock-text:hover {
+  background:transparent; text-decoration:underline; text-decoration-color:#c7b3da;
+  text-decoration-thickness:1px; text-underline-offset:4px;
+}
+.rf-email-unlock-text:focus-visible { outline:2px solid #29262d; outline-offset:5px; }
+.rf-row-unlock.rf-email-unlock-text:disabled,
+.research-detail .rf-find-contact.rf-email-unlock-text:disabled { cursor:wait; opacity:.55; }
 .rf-row-actions .rf-row-email { color:#3d333b; background:#fff; border-color:#e1dce1; }
 .rf-row-actions .rf-row-email:hover { background:#f6f2f5; }
 .rf-locked-actions .rf-locked-email { padding-inline:18px; min-height:36px; font-size:11px; }

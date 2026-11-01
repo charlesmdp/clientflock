@@ -87,6 +87,27 @@ Available tools:
 
 There is no `send` tool. The tool description instructs the assistant to get approval for the recipient and message before creating the draft. An assistant's own scheduling feature can call the tools if configured separately; MCP itself is not a scheduler or email account connection.
 
+## Using ClientFlock with Claude
+
+Claude's current custom web connectors support fixed request headers, including bearer tokens. This provides a route to connect the existing draft-only MCP without adding a new OAuth layer to ClientFlock. This combination has not been tested with a live Claude account.
+
+1. In ClientFlock, connect your mailbox and create or queue the draft you want to review. Expand **Connect through our MCP**, then click **Create my MCP connection**. Copy the generated **SERVER URL** and **BEARER TOKEN** from that panel. Use those exact values, not the example domain in this guide.
+2. In Claude, open **Customize → Connectors → Add → Custom → Web**. Name the connector **ClientFlock**, paste the copied server URL and continue.
+3. Choose **No sign in** for this fixed-token connection. Under **Request headers**, add the name `Authorization` with the value `Bearer ` followed by the copied token. Finish adding the connector. Keep the token private; do not paste it into a chat. For a personal mailbox, use a personal connector: fixed credentials in a Team or Enterprise connector may be shared with its users.
+4. Enable ClientFlock in the conversation. Ask Claude to list your ClientFlock drafts and show the recipient, subject and full message before taking an action.
+5. If you want Claude to send from Gmail, separately connect **Gmail** in Claude using the same intended sending account. Claude's Gmail connector supports sending with approval by default. Keep that approval requirement enabled, review the exact final message, and authorize each send explicitly. ClientFlock's MCP itself still cannot send.
+
+ClientFlock's `list_drafts` returns its saved content. It does not synchronize subsequent edits made in Gmail, and a message sent by Claude's Gmail connector is not marked as sent in ClientFlock. Check the existing draft and Sent folder before sending, and do not resend the same content from the two interfaces. Adding the connector also does not create a daily reminder or a scheduled Claude task.
+
+For a complete product flow, the recommended next implementation is a daily ClientFlock review card with **Approve & send**, **Edit** and **Skip**. Approval would bind to the exact mailbox, recipient and message version once, with duplicate-send protection. Sending would use the connected provider's OAuth API, and MCP could expose the same approval workflow to an assistant. This approval-and-send feature is not implemented; the current product prepares drafts only.
+
+Official documentation:
+
+- [Claude custom connectors and request headers](https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities)
+- [Claude Gmail connector and approval behavior](https://support.claude.com/en/articles/10166901-use-google-workspace-connectors)
+- [Send an existing Gmail draft](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.drafts/send)
+- [Send an Outlook draft and required Mail.Send permission](https://learn.microsoft.com/en-us/graph/api/message-send?view=graph-rest-1.0)
+
 ## Data and failure behavior
 
 - A secure, HttpOnly browser cookie identifies the connected mailbox session. This initial version has no cross-device account login. Use the same browser, or reconnect on another device. Sessions last 90 days, MCP tokens 30 days.
