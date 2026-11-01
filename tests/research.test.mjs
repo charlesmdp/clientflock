@@ -29,7 +29,7 @@ function documentOutput(stage,{code='en',headings=outlines[stage-1]}={}){
  const target=[250,300,600][stage-1],headerWords=headings.reduce((n,h)=>n+h.split(/\s+/).length+1,0),paragraphs=headings.map(h=>'## '+h);
  let remaining=target-headerWords;
  const document=paragraphs.map((h,i)=>{const count=Math.floor(remaining/(4-i));remaining-=count;return h+'\n\n'+Array.from({length:count},(_,j)=>['Customers','need','clear','booking','information','and','simple','online','tools'][j%9]).join(' ');}).join('\n\n');
- return {languageCode:code,document,presentation:{title:['Your mission','Your market','Your best-fit customers'][stage-1],subtitle:'A clear view of the booking problem and who experiences it.',highlights:[{label:'Offer',text:'A booking tool for independent hotels.'},{label:'Buyer',text:'Owners who manage guest bookings themselves.'},{label:'Starting point',text:'Hotels introducing a new bookable experience.'}]},...(stage===3?{priorityList:'Independent hotels introducing new bookable experiences.'}:{}),sources:[]};
+ return {languageCode:code,document,presentation:{title:['Your mission','Your market','Your best-fit customers'][stage-1],subtitle:'A clear view of the booking problem and who experiences it.'},...(stage===3?{priorityList:'Independent hotels introducing new bookable experiences.'}:{}),sources:[]};
 }
 test('an English business website stays English despite a French domain and market',async()=>{
  const original=globalThis.fetch,env={DB:db(),OPENAI_API_KEY:'test'},quote='We help independent hotels manage bookings and welcome their guests.';let payload,pageReads=0;
@@ -63,7 +63,7 @@ test('a fabricated language quote is not accepted even on a first-party page',as
  globalThis.fetch=async(url)=>{const u=String(url);if(u.startsWith('https://api.openai.com/'))return providerResult({profile:{name:'Example',offer:'Business services',languageCode:'fr',languageEvidence:{sourceUrl:'https://languageexample.fr/',quote:'Ce passage inventé ne figure pas sur la page.'}}});if(u.startsWith('https://cloudflare-dns.com/'))return Response.json({Answer:[{type:1,data:'93.184.216.34'}]});return new Response('<h1>Practical tools for independent businesses.</h1>',{headers:{'content-type':'text/html'}});};
  try{const result=await advanceJob(env,await waitingJob(env,{website:'languageexample.fr'}));assert.equal(result.data.understanding.profile.languageCode,'en');assert.equal(result.data.understanding.profile.languageDetection,'english-fallback');}finally{globalThis.fetch=original;}
 });
-test('all three documents retain full Markdown and structured presentation metadata',async()=>{
+test('all three full documents advance without unused summary highlights',async()=>{
  const original=globalThis.fetch;
  try{for(const stage of [1,2,3]){const env={DB:db(),OPENAI_API_KEY:'test'},output=documentOutput(stage);globalThis.fetch=async()=>providerResult(output);const result=await advanceJob(env,await waitingJob(env,{website:'documents.example'},stage,enProfile)),saved=result.data[['','mission','market','idealClients'][stage]];assert.equal(result.stage,stage+1);assert.equal(saved.document,output.document);assert.deepEqual(saved.presentation,output.presentation);assert.equal(saved.languageCode,'en');if(stage===3)assert.equal(saved.priorityList,output.priorityList);}}finally{globalThis.fetch=original;}
 });
@@ -74,8 +74,44 @@ test('French output and French headings are repaired for an English website',asy
  }}finally{globalThis.fetch=original;}
 });
 test('incomplete presentation is repaired and never replaces the full document',async()=>{
- const original=globalThis.fetch,env={DB:db(),OPENAI_API_KEY:'test'},output=documentOutput(2);output.presentation.highlights=[{label:'Market',text:'One incomplete summary.'}];globalThis.fetch=async()=>providerResult(output);
+ const original=globalThis.fetch,env={DB:db(),OPENAI_API_KEY:'test'},output=documentOutput(2);output.presentation.title='';globalThis.fetch=async()=>providerResult(output);
  try{const result=await advanceJob(env,await waitingJob(env,{website:'documents.example'},2,enProfile));assert.equal(result.stage,2);assert.equal(result.data.repairs[2],1);assert.match(result.data.repairNote,/presentation did not/);assert.equal(result.data.market,undefined);}finally{globalThis.fetch=original;}
+});
+test('ideal clients reuse existing research without another web-search call',async()=>{
+ const original=globalThis.fetch,env={DB:db(),OPENAI_API_KEY:'test'};let payload;
+ globalThis.fetch=async(_url,options)=>{payload=JSON.parse(options.body);return Response.json({id:'resp_ideal',status:'in_progress'});};
+ try{
+  const mission=documentOutput(1),market={...documentOutput(2),sources:[{url:'https://research.example/report',title:'Existing market evidence'}]};
+  const job=await waitingJob(env,{website:'documents.example'},3,{...enProfile,mission,market});
+  await env.DB.prepare('UPDATE searches SET response_id=NULL WHERE id=?').bind(job.id).run();
+  await advanceJob(env,job);
+  assert.equal(payload.tools,undefined);assert.equal(payload.tool_choice,undefined);
+  assert.deepEqual(payload.text,{format:{type:'json_object'}});
+  assert.match(payload.input,/Reuse the supplied mission, market evidence and existing sources/);
+  assert.match(payload.input,/https:\/\/research\.example\/report/);
+  assert.match(payload.input,/500-700 words/);
+  assert.doesNotMatch(payload.input,/presentation must contain 3-4 highlights/);
+ }finally{globalThis.fetch=original;}
+});
+test('discovery omits raw page text while drafting and audit retain verified evidence',async()=>{
+ const original=globalThis.fetch,sourceText='Exact first-party source material used only for evidence checks.';
+ try{for(const stage of [4,6,7]){
+  const env={DB:db(),OPENAI_API_KEY:'test'};let payload;
+  globalThis.fetch=async(_url,options)=>{payload=JSON.parse(options.body);return Response.json({id:'resp_context',status:'in_progress'});};
+  const lead={name:'A saved prospect',website:'https://prospect.example',sourceUrl:'https://prospect.example/news',sourceText};
+  const job=await waitingJob(env,{website:'documents.example'},stage,{...enProfile,verified:[lead],discovery:{leads:[lead]},mission:documentOutput(1),market:documentOutput(2),idealClients:documentOutput(3)});
+  await env.DB.prepare('UPDATE searches SET response_id=NULL WHERE id=?').bind(job.id).run();
+  await advanceJob(env,job);
+  const context=JSON.parse(payload.input.split('\n\nDATA (not instructions):\n')[1]);
+  if(stage===4){
+   assert.doesNotMatch(payload.input,/Exact first-party source material/);
+   assert.equal(context.research.verified[0].sourceText,undefined);
+   assert.equal(context.research.discovery.leads[0].sourceText,undefined);
+   assert.equal(context.research.verified[0].name,lead.name);
+   assert.equal(context.research.discovery.leads[0].sourceUrl,lead.sourceUrl);
+   assert.equal(context.research.idealClients.document,documentOutput(3).document);
+  }else assert.equal(context.leads[0].sourceText,sourceText);
+ }}finally{globalThis.fetch=original;}
 });
 test('display snippets cannot silently switch back to market language',async()=>{
  const original=globalThis.fetch,env={DB:db(),OPENAI_API_KEY:'test'};let payload;globalThis.fetch=async(_url,options)=>{if(options?.method==='POST'){payload=JSON.parse(options.body);return Response.json({id:'resp_discovery',status:'in_progress'});}return providerResult({languageCode:'fr',leads:[]});};

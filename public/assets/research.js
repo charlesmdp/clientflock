@@ -178,9 +178,22 @@
     return element.id ? '#' + CSS.escape(element.id) : null;
   }
 
+  function loadingStageCopy(stage = currentStage()) {
+    if (!job) return 'Opening your research.';
+    const progress = job.data?.discoveryProgress;
+    if ([4, 5].includes(stage) && progress?.target === 3) {
+      const checked = Number(progress.verified);
+      if (Number.isInteger(checked) && checked > 0 && checked < 3) {
+        return checked + (checked === 1 ? ' company checked. ' : ' companies checked. ') +
+          (stage === 5 ? 'Checking the others.' : checked === 2 ? 'Finding one more.' : 'Finding two more.');
+      }
+      if (stage === 4 && Number(progress.round) > 1) return 'Exploring another angle for your next customers.';
+    }
+    return phaseCopy[stage];
+  }
   function updateLoading() {
     const stage = currentStage(), status = modal.querySelector('.rf-loading-stage');
-    if (status) status.textContent = job ? phaseCopy[stage] : 'Opening your research.';
+    if (status) status.textContent = loadingStageCopy(stage);
     updateProgress();
     const rows = modal.querySelector('.rf-loading-docs');
     if (rows && rows.dataset.ready !== String(readyDocs())) { rows.dataset.ready = String(readyDocs()); rows.innerHTML = documentRows(); bindDocumentButtons(rows); }
@@ -208,7 +221,7 @@
     const progress = modal.querySelector('.rf-loading-progress progress');
     if (progress) { progress.value = estimate.percent; progress.setAttribute('aria-valuetext', estimate.percent + '% of research steps completed'); }
     const percent = modal.querySelector('[data-progress-percent]'), time = modal.querySelector('[data-progress-time]');
-    if (percent) percent.textContent = estimate.percent + '%';
+    if (percent) percent.textContent = estimate.percent + '% of steps';
     if (time) time.textContent = estimate.remaining;
     const ribbon = modal.querySelector('.rf-rainbow-ribbon');
     if (ribbon) ribbon.style.setProperty('--rf-progress', Math.max(4, estimate.percent) + '%');
@@ -237,7 +250,7 @@
 
   function loadingView() {
     const stage = currentStage(), estimate = progressEstimate();
-    return '<section class="rf-loading" aria-label="Customer research in progress"><div class="rf-loading-art" aria-hidden="true"><img class="rf-loading-frame is-visible" src="/assets/swan.svg" alt="" decoding="async"><img class="rf-loading-frame rf-loading-next" alt="" decoding="async"></div><h1>Finding your next customers.</h1><p class="rf-loading-stage" role="status" aria-live="polite">' + (job ? phaseCopy[stage] : 'Opening your research.') + '</p><div class="rf-loading-progress"><span class="rf-rainbow-ribbon" aria-hidden="true"><i></i></span><div class="rf-progress-labels"><strong data-progress-percent>' + estimate.percent + '%</strong><span data-progress-time title="Approximate time, based on the remaining research steps. It may vary as websites are checked.">' + estimate.remaining + '</span></div><progress class="rf-visually-hidden" max="100" value="' + estimate.percent + '" aria-label="Research progress"></progress></div><div class="rf-loading-docs" data-ready="' + readyDocs() + '">' + documentRows() + '</div></section>';
+    return '<section class="rf-loading" aria-label="Customer research in progress"><div class="rf-loading-art" aria-hidden="true"><img class="rf-loading-frame is-visible" src="/assets/swan.svg" alt="" decoding="async"><img class="rf-loading-frame rf-loading-next" alt="" decoding="async"></div><h1>Finding your next customers.</h1><p class="rf-loading-stage" role="status" aria-live="polite">' + loadingStageCopy(stage) + '</p><div class="rf-loading-progress"><span class="rf-rainbow-ribbon" aria-hidden="true"><i></i></span><div class="rf-progress-labels"><strong data-progress-percent>' + estimate.percent + '% of steps</strong><span data-progress-time title="Approximate time, based on the remaining research steps. It may vary as websites are checked.">' + estimate.remaining + '</span></div><progress class="rf-visually-hidden" max="100" value="' + estimate.percent + '" aria-label="Research progress"></progress></div><div class="rf-loading-docs" data-ready="' + readyDocs() + '">' + documentRows() + '</div></section>';
   }
 
   const emailApps = [
@@ -513,13 +526,15 @@
     running = true; const run = generation, id = job.id;
     try {
       while (modal.open && job.status === 'working' && run === generation && !needsRecheck()) {
+        const previousStage = job.stage;
         const previous = [job.stage, job.status, readyDocs(), qualification()?.status].join('|');
         const next = await request('/api/search/' + id + '/advance', {});
         if (run !== generation) return;
         const cached = job.cached; job = next; job.cached = cached;
         if ([job.stage, job.status, readyDocs(), qualification()?.status].join('|') !== previous) render();
+        else if (job.status === 'working') updateLoading();
         if (needsRecheck()) break;
-        if (job.status === 'working') await new Promise(resolve => setTimeout(resolve, 3500));
+        if (job.status === 'working' && job.stage === previousStage) await new Promise(resolve => setTimeout(resolve, 3500));
       }
     } catch (error) { if (run === generation) notice(error.message + ' Close and resume to try again.'); }
     finally { if (run === generation) running = false; }

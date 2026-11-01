@@ -127,25 +127,24 @@ async function resolvePlatformRequirements(input,profile,loadPage=publicPage){
 }
 function documentContract(stage,data){
  const {code,name}=contentLanguage(data),headings=documentHeadings[code.split('-')[0]]?.[stage-1];
- const takeaways=['customer value, priority audience and the proposed first 90-day goals','available market evidence, the competitive landscape, the strongest opportunity and the main risk','the first priority list, its buyer problem, a relevant reason to reach out and the first acquisition channel'][stage-1];
- return `Write the entire document and every presentation string in ${name} (${code}). ${headings?'Use exactly these level-two Markdown headings in this order: '+headings.map(h=>'## '+h).join('; ')+'.':'Translate all suggested section headings into '+name+'.'} Return {languageCode:${JSON.stringify(code)},document:"full Markdown document",presentation:{title:"short document title",subtitle:"one concrete sentence summarizing this document",highlights:[{label:"short heading",text:"specific takeaway from this document"}]},${stage===3?'priorityList:"precise description of list 1 in '+name+'",':''}sources:[{url,title}]}. presentation must contain 3-4 highlights summarizing ${takeaways}, each label at most 70 characters and text at most 300 characters. Its title is at most 120 characters and subtitle at most 220 characters. Summarize actual document content; do not add invented metrics, unsupported claims or a second generic introduction. Presentation metadata is separate from the full document and its word count.`;
+ return `Write the entire document and every presentation string in ${name} (${code}). ${headings?'Use exactly these level-two Markdown headings in this order: '+headings.map(h=>'## '+h).join('; ')+'.':'Translate all suggested section headings into '+name+'.'} Return {languageCode:${JSON.stringify(code)},document:"full Markdown document",presentation:{title:"short document title",subtitle:"one concrete sentence summarizing this document"},${stage===3?'priorityList:"precise description of list 1 in '+name+'",':''}sources:[{url,title}]}. Presentation contains only a title of at most 120 characters and subtitle of at most 220 characters. Do not generate separate highlights or summary cards. Summarize actual document content; do not add invented metrics, unsupported claims or a second generic introduction. Presentation metadata is separate from the full document and its word count.${stage===3?' Reuse the supplied mission, market evidence and existing sources. Treat audience segments and acquisition ideas as proposals, and do not introduce new factual claims that require another web search.':''}`;
 }
 function validatePresentation(output,stage,data){
  const {code}=contentLanguage(data);
  if(languageCode(output.languageCode)!==code)throw Error('The research response language did not match '+code+'. Rewrite every document heading, paragraph, table cell and presentation string in '+languageName(code)+', and return languageCode '+code+'.');
  const p=output.presentation,valid=(s,max)=>typeof s==='string'&&s.trim().length>0&&s.length<=max;
- if(!p||!valid(p.title,120)||!valid(p.subtitle,220)||!Array.isArray(p.highlights)||p.highlights.length<3||p.highlights.length>4||p.highlights.some(h=>!valid(h?.label,70)||!valid(h?.text,300)))throw Error('The document presentation did not contain a title, subtitle and 3-4 concise labeled highlights. Return the full document and complete presentation metadata.');
+ if(!p||!valid(p.title,120)||!valid(p.subtitle,220))throw Error('The document presentation did not contain a concise title and subtitle. Return the full document and complete presentation metadata.');
  const expected=documentHeadings[code.split('-')[0]]?.[stage-1];
  if(expected){const actual=[...String(output.document||'').matchAll(/^##\s+(.+?)\s*$/gm)].map(m=>m[1]);if(expected.length!==actual.length||expected.some((heading,i)=>heading!==actual[i]))throw Error('The document did not use its '+languageName(code)+' headings in order: '+expected.join('; ')+'. Keep the complete document and presentation in that language.');}
 }
 function prompt(stage,input,data){
- const context=JSON.stringify(stage===6||stage===7?{business:input,profile:data.understanding?.profile,leads:data.verified,repairNote:data.repairNote}:{business:input,research:data});
+ const context=JSON.stringify(stage===6||stage===7?{business:input,profile:data.understanding?.profile,leads:data.verified,repairNote:data.repairNote}:{business:input,research:data},stage<=4?(key,value)=>key==='sourceText'?undefined:value:undefined);
  const instructions=[
  'Research the input business website using web search. Identify its actual offer and audience. Detect language ONLY from readable text on the supplied website or a first-party page on that same domain, not its market, country, domain suffix or a search-engine summary. Quote an exact short passage from that page as evidence, and give its actual sourceUrl. Prefer the language of the main offer copy on the supplied website. If inaccessible or ambiguous, state what is missing and use English/en with languageEvidence:null. For a supplied business description, detect the language of that description itself, quote a passage directly from it and use sourceUrl:null; research its category separately. Return {profile:{name,offer,audience,language:"language name",languageCode:"BCP-47 code such as en, fr or pt-BR",languageEvidence:{sourceUrl,quote},requirements:[{type:"platform",name:"Shopify",required:true,reason:"why an existing Shopify store is mandatory",evidence:{url:"official product or apps.shopify.com page",quote:"short exact dependency statement"}}],limitations},sources:[{url,title}]}. requirements is an empty array when there is no mandatory platform dependency. A Shopify app whose product runs inside Shopify MUST require existing Shopify stores as prospects. The seller merely using Shopify, mentioning Shopify, offering optional integrations, or supporting multiple ecommerce platforms is NOT a mandatory Shopify dependency. Ground requirements in an exact product-content quote, or the supplied business description with evidence.url:null. Use the detected language for the offer, audience and limitations too. Do not identify leads yet.',
  'Produce a mission document (200-300 words, excluding sources and presentation metadata). Sections in order: vision (one paragraph), target audience (3-4 bullets), value proposition (one paragraph), 90-day goals (3-4 measurable proposed goals). No leads yet.',
  'Research and produce a market document (250-350 words excluding sources and presentation metadata). Sections in order: market size (sourced figures, geography, year, trends; do not invent a TAM, say unavailable if necessary), main competitors (3-5 actual named competitors and positions), opportunities (3-4 bullets), risks (2-3 bullets). Cite sources inline with Markdown links. No leads yet.',
  'Produce an ideal-clients document (500-700 words excluding sources and presentation metadata), based on the mission and market. Sections in order: your ideal customer (paragraph and 3-5 distinct subsegments with concrete examples), priority lists to build (Markdown table with exactly 5 data rows and three translated columns: number, list, why it is valuable), where to start (recommend list 1, with timing, specific pain and sales angle), how to win your first customers (cold email angle, targeted ad audience and visual, 2-3 blog ideas). Think beyond obvious industries but explain buyer fit. Do not search for individual leads yet.',
- 'Exclude every domain in research.rejectedDomains and every company explicitly rejected in repairNote. Do not reuse inaccessible sources or companies. Find EXACTLY 3 real distinct companies from priority list 1 in the ideal-clients document. Search the web. For each identify an exact recent factual detail from an official company page or a reputable interview, not an inferred purchase intent. Return {leads:[{name,website,roleToContact,whyNow,whatToSell,benefit,sourceUrl,sourceTitle,sourceDate,evidenceQuote,contactUrl}],sources:[{url,title}]}. evidenceQuote must be a short verbatim quote (at most 25 words), present on sourceUrl. whyNow must distinguish the fact/date from the sales hypothesis and not claim purchase intent. contactUrl must be a real published company contact page; never invent an email or person. If fewer than 3 can be found, return those only and explain limitations.',
+ 'Exclude every domain in research.rejectedDomains and every company already present in research.verified or research.discovery.leads. Keep the saved prospects; research only the missing matches needed to reach 3 verified companies. Start with priority list 1 in the ideal-clients document. If that list is exhausted, use the next relevant priority lists while preserving the same offer, target geography and every mandatory platform prerequisite. Search the web for real distinct companies. You may return up to 6 candidates to provide alternatives, but never invent companies to fill a quota. For each identify an exact factual detail from an official company page or a reputable interview, not inferred purchase intent. Prefer recent evidence when available. Return {leads:[{name,website,roleToContact,whyNow,whatToSell,benefit,sourceUrl,sourceTitle,sourceDate,evidenceQuote,contactUrl}],sources:[{url,title}],limitations:"what could not be established"}. evidenceQuote must be a short verbatim quote (at most 25 words), present on sourceUrl. whyNow must distinguish the fact/date from the sales hypothesis and not claim purchase intent. contactUrl must be a real published company contact page, or the company website when no contact page is known; never invent an email or person. If fewer candidates can be found, return those only and explain limitations.',
  '',
  'Draft an email for each VERIFIED lead using only the verified research. Return {emails:[{name,evidenceQuote,whyNow,subject,email}]}. First select a precise verbatim evidenceQuote of 6-25 words from each lead sourceText. The quote must appear exactly in sourceText and retain its original language. Rewrite whyNow to use only that actual fact, distinguishing the observed fact from your sales hypothesis. Do not use earlier unverified facts. Draft the opening from this checked quote. Preserve exact company names. Subject: at most 6 words, lowercase, no emoji, inviting. Body: at most 6 short sentences, casual and human, founder to peer. Start with the verified precise prospect detail. Never say I hope this message finds you well, following my research, allow me to introduce myself (nor translations). Do not introduce any unsupported fact. End with a light question. No fabricated sender identity or signature. Use the resolved business content language for the email and display text.',
  'Audit the three drafted emails against the verified source quotes and known offer only. Return {checks:[{name,supported,reason}]}, exactly one per lead. supported is a boolean. False if the opening is not a precise sourced detail, if any claimed prospect fact lacks evidence, or if the draft invents a relationship, urgency, buying intent, performance number or sender identity. Proposed benefits must be framed as proposals. Do not assume an earlier model checked the draft. Check every sentence. Return JSON only.'
@@ -162,21 +161,55 @@ function extract(response){const chunks=(response.output||[]).flatMap(x=>x.conte
 // Resolve before every fetch and redirect; Cloudflare still performs transport DNS.
 // Limit to public HTTPS domain names, reject all non-public DNS answers.
 function publicIP(ip){if(ip.includes(':'))return /^(2|3)[0-9a-f]{3}:/i.test(ip)&&!/^2001:(db8|0):/i.test(ip);const n=ip.split('.').map(Number);return n.length===4&&n.every(x=>x>=0&&x<=255)&&![0,10,127].includes(n[0])&&n[0]<224&&!(n[0]===169&&n[1]===254)&&!(n[0]===172&&n[1]>=16&&n[1]<=31)&&!(n[0]===192&&(n[1]===168||n[1]===0||n[1]===2))&&!(n[0]===100&&n[1]>=64&&n[1]<=127)&&!(n[0]===198&&(n[1]===18||n[1]===19||n[1]===51))&&!(n[0]===203&&n[1]===0);}
-export async function publicPage(url,{details=false}={}){
+export async function publicPage(url,{details=false,signal}={}){
  let u=new URL(url);
  for(let i=0;i<4;i++){
+  signal?.throwIfAborted();
   if(u.protocol!=='https:'||u.port||u.username||u.password)throw Error('Source must be public HTTPS.');normalizeInput({website:u.origin});
-  const dns=await fetch('https://cloudflare-dns.com/dns-query?name='+encodeURIComponent(u.hostname)+'&type=A',{headers:{Accept:'application/dns-json'},signal:AbortSignal.timeout(7000)}).then(r=>r.json());
+  const dns=await fetch('https://cloudflare-dns.com/dns-query?name='+encodeURIComponent(u.hostname)+'&type=A',{headers:{Accept:'application/dns-json'},signal:signal?AbortSignal.any([signal,AbortSignal.timeout(7000)]):AbortSignal.timeout(7000)}).then(r=>r.json());
   const ips=(dns.Answer||[]).filter(a=>a.type===1).map(a=>a.data);if(!ips.length||!ips.every(publicIP))throw Error('Source is not a public website.');
-  const r=await fetch(u,{redirect:'manual',headers:{Accept:'text/html,text/plain','User-Agent':'ClientFlock/1.0 (+public business research)'},signal:AbortSignal.timeout(10000)});
+  const r=await fetch(u,{redirect:'manual',headers:{Accept:'text/html,text/plain','User-Agent':'ClientFlock/1.0 (+public business research)'},signal:signal?AbortSignal.any([signal,AbortSignal.timeout(10000)]):AbortSignal.timeout(10000)});
   if(r.status>=300&&r.status<400){u=new URL(r.headers.get('location'),u);continue;}
   if(!r.ok||!/(text\/html|text\/plain)/i.test(r.headers.get('content-type')||''))throw Error('Source could not be checked.');
-  const reader=r.body.getReader();let size=0,parts=[];while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>750000){await reader.cancel();break;}parts.push(value)}
+  const reader=r.body.getReader();let size=0,parts=[];while(true){signal?.throwIfAborted();const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>750000){await reader.cancel();break;}parts.push(value)}
   const decoder=new TextDecoder();const html=parts.map(p=>decoder.decode(p,{stream:true})).join('')+decoder.decode();
   const text=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&#(x[0-9a-f]+|[0-9]+);/gi,(_,n)=>{const v=n[0].toLowerCase()==='x'?parseInt(n.slice(1),16):Number(n);return v>0&&v<=0x10ffff?String.fromCodePoint(v):' '}).replace(/&(rsquo|lsquo|rdquo|ldquo|ndash|mdash|hellip);/g,(_,n)=>({rsquo:"'",lsquo:"'",rdquo:'\"',ldquo:'\"',ndash:'–',mdash:'—',hellip:'…'}[n])).replace(/&amp;/g,'&').replace(/&nbsp;|&#160;/g,' ').replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/\s+/g,' ').trim();
   if(!details)return text;
   const checkedAt=new Date().toISOString();return {text,url:u.href,checkedAt,platform:detectPlatform(html,u.href,checkedAt)};
  }throw Error('Too many source redirects.');
+}
+const MAX_DISCOVERY_ROUNDS=4;
+function candidatePool(data,...lists){
+ const rejected=new Set(data.rejectedDomains||[]),seen=new Set(),result=[];
+ for(const lead of lists.flat()){
+  try{
+   if(!lead||typeof lead!=='object'||typeof lead.name!=='string'||!lead.name.trim()||lead.name.length>200)continue;
+   const website=normalizeInput({website:lead.website}).value;
+   if(rejected.has(website)||seen.has(website))continue;
+   const source=new URL(lead.sourceUrl);normalizeInput({website:source.href});source.protocol='https:';
+   seen.add(website);result.push({...lead,name:lead.name.trim(),website,sourceUrl:source.href,contactUrl:website});
+   if(result.length===6)break;
+  }catch{/* One malformed candidate must not discard the usable companies. */}
+ }
+ return result;
+}
+function discoveryProgress(data){data.discoveryProgress={verified:(data.verified||[]).length,candidates:(data.discovery?.leads||[]).length,target:3,round:data.discoveryRounds||0};}
+function discoveryPause(data,budgetExhausted=false){return 'We verified '+(data.verified||[]).length+' of 3 suitable companies. Your research is saved. '+(budgetExhausted?'This search has reached its research limit.':'Continue to look for the remaining matches.');}
+async function verifyCandidate(candidate,profile,signal){
+ const lead={...candidate};let websitePage;
+ if(signal.aborted)return {deferred:lead};
+ try{
+  try{websitePage=await publicPage(lead.website,{details:true,signal});lead.platform=websitePage.platform;lead.websiteCheck={url:websitePage.url,status:'checked',checkedAt:websitePage.checkedAt};}
+  catch{lead.platform=unavailablePlatform(lead.website);lead.websiteCheck={url:lead.website,status:'unavailable',checkedAt:lead.platform.checkedAt};}
+  if(signal.aborted)return {deferred:candidate};
+  if(!platformMatchesRequirements(profile,lead.platform))throw Error('Required '+requiredPlatforms(profile).join(' and ')+' use could not be verified.');
+  let page;
+  try{page=websitePage&&new URL(lead.sourceUrl).href===new URL(lead.website).href?websitePage.text:await publicPage(lead.sourceUrl,{signal});}
+  catch{if(signal.aborted)return {deferred:candidate};if(websitePage){page=websitePage.text;lead.sourceUrl=websitePage.url;lead.sourceTitle=lead.name+' official website';lead.sourceDate=null;}else throw Error('No accessible source page could be checked.');}
+  if(!page.trim())throw Error('The source page had no readable content.');
+  lead.sourceText=page.slice(0,24000);lead.contactUrl=lead.website;lead.contactStatus='Company website; no verified personal email yet';
+  return {lead};
+ }catch(error){if(signal.aborted)return {deferred:candidate};return {rejected:{name:lead.name,website:lead.website,platform:lead.platform,websiteCheck:lead.websiteCheck,reason:error.message}};}
 }
 async function advance(env,row){
  if(requiresRequalification(JSON.parse(row.data)))return view(row);
@@ -186,26 +219,27 @@ async function advance(env,row){
  try{
   row=await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(row.id).first();const data=JSON.parse(row.data),input=JSON.parse(row.input);
   if(row.stage===5){
-   const leads=data.discovery.leads;
-   for(const lead of leads){
-    let websitePage;
-    try{websitePage=await publicPage(lead.website,{details:true});lead.platform=websitePage.platform;lead.websiteCheck={url:websitePage.url,status:'checked',checkedAt:websitePage.checkedAt};}
-    catch{lead.platform=unavailablePlatform(lead.website);lead.websiteCheck={url:lead.website,status:'unavailable',checkedAt:lead.platform.checkedAt};}
-    if(!platformMatchesRequirements(data.understanding?.profile,lead.platform)){
-     const error=Error('Platform requirement could not be verified for '+lead.name+' at '+lead.website+'. This product requires existing '+requiredPlatforms(data.understanding?.profile).join(' and ')+' stores. Unknown or inaccessible platform evidence does not qualify. Find a different company.');
-     error.rejectedProspect={name:lead.name,website:lead.website,platform:lead.platform,websiteCheck:lead.websiteCheck,reason:'Mandatory platform use was not verified.'};throw error;
-    }
-    let page;
-    try{page=websitePage&&new URL(lead.sourceUrl).href===new URL(lead.website).href?websitePage.text:await publicPage(lead.sourceUrl);}
-    catch{if(websitePage){page=websitePage.text;lead.sourceUrl=websitePage.url;lead.sourceTitle=lead.name+' official website';lead.sourceDate=null;}else throw Error('Source could not be checked for '+lead.name+' at '+lead.sourceUrl+'. Find a different accessible company, not this one.');}
-    lead.sourceText=page.slice(0,24000);lead.contactUrl=lead.website;lead.contactStatus='Company website; no verified personal email yet';
+   const profile=data.understanding?.profile,accepted=candidatePool(data,data.verified||[]).filter(lead=>typeof lead.sourceText==='string'&&lead.sourceText.trim()&&platformMatchesRequirements(profile,lead.platform)).slice(0,3);
+   const acceptedDomains=new Set(accepted.map(lead=>lead.website)),pool=candidatePool(data,data.discovery?.leads||[]).filter(lead=>!acceptedDomains.has(lead.website));
+   // One shared deadline bounds all network checks below the 90-second lease.
+   const signal=AbortSignal.timeout(60000),rejected=[],deferred=[];
+   for(let offset=0;offset<pool.length&&accepted.length<3;offset+=3){
+    if(signal.aborted){deferred.push(...pool.slice(offset));break;}
+    const checked=await Promise.all(pool.slice(offset,offset+3).map(lead=>verifyCandidate(lead,profile,signal)));
+    for(const result of checked){if(result.lead){if(accepted.length<3)accepted.push(result.lead);}else if(result.deferred)deferred.push(result.deferred);else rejected.push(result.rejected);}
    }
-   data.qualification={version:QUALIFICATION_VERSION,status:'verified',requiredPlatforms:requiredPlatforms(data.understanding?.profile),checkedAt:new Date().toISOString()};
-   data.verified=leads;await save(env,row,lease,{data,stage:6,responseId:null});
+   data.rejectedDomains=[...new Set([...(data.rejectedDomains||[]),...rejected.map(lead=>lead.website)])];
+   data.rejectedProspects=[...(data.rejectedProspects||[]),...rejected].slice(-12);
+   data.verified=accepted;data.discovery={...data.discovery,leads:accepted.length===3?accepted:candidatePool(data,accepted,deferred)};data.discoveryRounds=Math.max(1,data.discoveryRounds||0);discoveryProgress(data);
+   const complete=accepted.length===3;
+   data.qualification={version:QUALIFICATION_VERSION,status:complete?'verified':'pending',requiredPlatforms:requiredPlatforms(profile),checkedAt:new Date().toISOString()};
+   if(!complete){data.repairs={...data.repairs,5:(data.repairs?.[5]||0)+1};data.repairNote='Keep the '+accepted.length+' verified companies already saved. Find '+(3-accepted.length)+' additional suitable companies. Exclude rejected domains. If priority list 1 is exhausted, use the next relevant priority lists without changing the offer, target geography or mandatory platform requirements.';}
+   const exhausted=!complete&&(data.discoveryRounds>=MAX_DISCOVERY_ROUNDS||row.attempts>=24);
+   await save(env,row,lease,{data,stage:complete?6:4,responseId:null,status:exhausted?'failed':'working',error:exhausted?discoveryPause(data,row.attempts>=24):null});
   }else if(!row.response_id){
    if(row.attempts>=24)throw Error('This search reached its research budget.');
    await budget(env.DB,'provider:'+new Date().toISOString().slice(0,10),Number(env.DAILY_PROVIDER_LIMIT||100));
-   const search=[0,2,3,4].includes(row.stage);
+   const search=[0,2,4].includes(row.stage);
    const response=await openai(env,'responses',{model:((data.repairs?.[row.stage]||0)+(row.stage===4?data.repairs?.[5]||0:row.stage===6?data.repairs?.[7]||data.repairs?.[5]||0:0))>0?(env.OPENAI_FALLBACK_MODEL||'gpt-6.1-sol'):(env.OPENAI_MODEL||'gpt-6-luna'),background:true,store:true,instructions:base,input:prompt(row.stage,input,data),max_output_tokens:10000,reasoning:{effort:'low'},...(!search?{text:{format:{type:'json_object'}}}:{}),...(search?{tool_choice:'required',tools:[{type:'web_search'}],include:['web_search_call.action.sources']}:{} )});
    await env.DB.prepare('UPDATE searches SET response_id=?,attempts=attempts+1,lease=NULL,lease_until=0,updated_at=? WHERE id=? AND lease=?').bind(response.id,Date.now(),row.id,lease).run();
   }else{
@@ -220,7 +254,16 @@ async function advance(env,row){
     if([0,2,4].includes(row.stage)&&!output.citations.length)throw Error('The research did not return verifiable web sources.');
     if(row.stage===0){const pages=new Map(),loadPage=url=>{const key=new URL(url).href;if(!pages.has(key))pages.set(key,publicPage(key));return pages.get(key);};output.profile=await resolveProfileLanguage(input,output.profile,loadPage);output.profile=await resolvePlatformRequirements(input,output.profile,loadPage);data.qualification={version:QUALIFICATION_VERSION,status:'pending',requiredPlatforms:requiredPlatforms(output.profile)};}
     if([4,6,7].includes(row.stage)&&languageCode(output.languageCode)!==contentLanguage(data).code)throw Error('The research response language did not match '+contentLanguage(data).code+'. Return that languageCode and use the resolved business language for every generated display snippet, email and review reason. Preserve exact source quotes and names.');
-    if(row.stage===4){if(output.leads?.length!==3||new Set(output.leads.map(l=>normalizeInput({website:l.website}).value)).size!==3)throw Error('We could not establish three distinct prospects. Please refine your business description.');for(const l of output.leads){l.website=normalizeInput({website:l.website}).value;if((data.rejectedDomains||[]).includes(l.website))throw Error('The research did not return verifiable prospects: it repeated a rejected domain. Choose different companies.');normalizeInput({website:l.sourceUrl});normalizeInput({website:l.contactUrl});}}
+    if(row.stage===4){
+     output.leads=candidatePool(data,data.verified||[],data.discovery?.leads||[],Array.isArray(output.leads)?output.leads:[]);
+     data.discoveryRounds=(data.discoveryRounds||0)+1;data.discovery=output;discoveryProgress(data);
+     if(!output.leads.length){
+      data.repairs={...data.repairs,4:(data.repairs?.[4]||0)+1};data.repairNote='No usable new company was returned. Research the next relevant ideal-customer priority list while preserving the same offer, target geography and mandatory platform requirements. Return real companies with accessible source URLs; never invent results.';
+      const exhausted=data.discoveryRounds>=MAX_DISCOVERY_ROUNDS||row.attempts>=24;
+      await save(env,row,lease,{data,stage:4,responseId:null,status:exhausted?'failed':'working',error:exhausted?discoveryPause(data,row.attempts>=24):null});
+      return view(await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(row.id).first());
+     }
+    }
     if(row.stage===6){if(output.emails?.length!==3)throw Error('Email drafts were incomplete.');for(const l of data.verified){const email=output.emails.find(x=>x.name===l.name);if(!email)throw Error('Email company mismatch.');validateEmail(email);const clean=s=>String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();if(wordCount(email.evidenceQuote||'')<6||wordCount(email.evidenceQuote||'')>25||!clean(l.sourceText).includes(clean(email.evidenceQuote)))throw Error('An email draft failed its source-quote check. Copy a precise 6-25 word quote exactly from sourceText.');Object.assign(l,email,{verifiedAt:new Date().toISOString()});}data.leads=data.verified;}
     if(row.stage===7){if(output.checks?.length!==3||data.leads.some(l=>!output.checks.some(c=>c.name===l.name&&c.supported===true)))throw Error('An email draft failed its factual review: '+(output.checks||[]).filter(c=>c.supported!==true).map(c=>c.name+': '+c.reason).join('; ').slice(0,1200));}
     if(row.stage===7){for(const list of [data.discovery?.leads,data.verified,data.leads])for(const lead of list||[])delete lead.sourceText;}
@@ -237,7 +280,7 @@ async function advance(env,row){
  }
  return view(await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(row.id).first());
 }
-async function save(env,row,lease,{data,stage,responseId,status='working'}){await env.DB.prepare('UPDATE searches SET data=?,stage=?,response_id=?,status=?,lease=NULL,lease_until=0,error=NULL,updated_at=? WHERE id=? AND lease=?').bind(JSON.stringify(data),stage,responseId,status,Date.now(),row.id,lease).run();}
+async function save(env,row,lease,{data,stage,responseId,status='working',error=null}){await env.DB.prepare('UPDATE searches SET data=?,stage=?,response_id=?,status=?,lease=NULL,lease_until=0,error=?,updated_at=? WHERE id=? AND lease=?').bind(JSON.stringify(data),stage,responseId,status,error,Date.now(),row.id,lease).run();}
 async function nextBatch(request,env,parent){
  const previous=JSON.parse(parent.data),page=Number(previous.pagination?.page||1)+1;
  if(parent.status!=='complete'||requiresRequalification(previous)||previous.qualification?.status!=='verified')return json({error:'Finish and verify this shortlist before finding more customers.'},409);
@@ -324,7 +367,7 @@ export async function api(request,env){
    return await handleContacts(request,env,row);
   }
   if(request.method==='POST'&&match[2]==='advance')return json(await advance(env,row));
-  if(request.method==='POST'&&match[2]==='retry'&&row.status==='failed'&&row.attempts<24){const data=JSON.parse(row.data);if(requiresRequalification(data))return json({...view(row),error:'Recheck this older search before retrying.'},409);data.repairNote=row.error;for(const lead of data.discovery?.leads||[])if(row.stage===5&&String(row.error).includes(lead.name))data.rejectedDomains=[...new Set([...(data.rejectedDomains||[]),normalizeInput({website:lead.website}).value])];await env.DB.prepare('UPDATE searches SET data=?,stage=CASE WHEN stage=5 THEN 4 WHEN stage=7 THEN 6 ELSE stage END,status=\'working\',error=NULL,response_id=NULL,lease=NULL,lease_until=0 WHERE id=? AND status=\'failed\'').bind(JSON.stringify(data),row.id).run();return json(view(await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(row.id).first()));}
+  if(request.method==='POST'&&match[2]==='retry'&&row.status==='failed'&&row.attempts<24){const data=JSON.parse(row.data);if(requiresRequalification(data))return json({...view(row),error:'Recheck this older search before retrying.'},409);data.repairNote=row.error;if(row.stage===4||row.stage===5){data.discoveryRounds=0;discoveryProgress(data);}for(const lead of data.discovery?.leads||[])if(row.stage===5&&String(row.error).includes(lead.name))data.rejectedDomains=[...new Set([...(data.rejectedDomains||[]),normalizeInput({website:lead.website}).value])];await env.DB.prepare('UPDATE searches SET data=?,stage=CASE WHEN stage=5 THEN 4 WHEN stage=7 THEN 6 ELSE stage END,status=\'working\',error=NULL,response_id=NULL,lease=NULL,lease_until=0 WHERE id=? AND status=\'failed\'').bind(JSON.stringify(data),row.id).run();return json(view(await env.DB.prepare('SELECT * FROM searches WHERE id=?').bind(row.id).first()));}
   return json({error:'Method not allowed.'},405);
  }catch(e){return json({error:e.message||'Unable to start research.'},400);}
 }
